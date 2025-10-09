@@ -1,8 +1,10 @@
-
 import tkinter as tk
 from tkinter import filedialog, colorchooser, messagebox
 from PIL import Image, ImageTk
 import pyscreenshot as ImageGrab
+import cv2
+import numpy as np
+from filters import LinearFilters, NonLinearFilters, EdgeDetection
 
 
 class SmartImageEditor:
@@ -13,6 +15,7 @@ class SmartImageEditor:
 
         # ---- Variables ----
         self.image = None
+        self.original_image = None  # ✅ ADD THIS!
         self.tk_image = None
         self.file_path = None
         self.drawing = False
@@ -24,6 +27,7 @@ class SmartImageEditor:
         self.menu = tk.Menu(self.root)
         self.root.config(menu=self.menu)
 
+        # File Menu
         file_menu = tk.Menu(self.menu, tearoff=0)
         self.menu.add_cascade(label="File", menu=file_menu)
         file_menu.add_command(label="Open", command=self.open_image)
@@ -31,14 +35,43 @@ class SmartImageEditor:
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
 
+        # Edit Menu
         edit_menu = tk.Menu(self.menu, tearoff=0)
         self.menu.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="Reset to Original", command=self.reset_to_original)  # ✅ ADD THIS!
+        edit_menu.add_separator()  # ✅ ADD THIS!
         edit_menu.add_command(label="Choose Color", command=self.choose_color)
         edit_menu.add_command(label="Clear Canvas", command=self.clear_canvas)
+
+        # Filters Menu
+        filter_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Filters", menu=filter_menu)
+        
+        # Linear Filters submenu
+        linear_menu = tk.Menu(filter_menu, tearoff=0)
+        filter_menu.add_cascade(label="Linear Filters", menu=linear_menu)
+        linear_menu.add_command(label="Mean Filter", command=self.apply_mean_filter)
+        linear_menu.add_command(label="Gaussian Blur", command=self.apply_gaussian_filter)
+        linear_menu.add_command(label="Sharpen", command=self.apply_sharpen_filter)
+        
+        # Non-linear filter
+        filter_menu.add_command(label="Median Filter", command=self.apply_median_filter)
+        
+        # Edge Detection submenu
+        edge_menu = tk.Menu(filter_menu, tearoff=0)
+        filter_menu.add_cascade(label="Edge Detection", menu=edge_menu)
+        edge_menu.add_command(label="Sobel Edge", command=self.apply_sobel)
+        edge_menu.add_command(label="Prewitt Edge", command=self.apply_prewitt)
+        edge_menu.add_command(label="Laplacian Edge", command=self.apply_laplacian)
 
         # ---- Canvas Area ----
         self.canvas = tk.Canvas(self.root, bg="lightgray")
         self.canvas.pack(fill="both", expand=True)
+        
+        # Bind mouse events for drawing
+        self.canvas.bind("<ButtonPress-1>", self.start_draw)
+        self.canvas.bind("<B1-Motion>", self.paint)
+        self.canvas.bind("<ButtonRelease-1>", self.stop_draw)
 
         # Status bar
         self.status = tk.Label(self.root, text="Ready", bd=1, relief="sunken", anchor="w")
@@ -62,56 +95,84 @@ class SmartImageEditor:
         control_panel = tk.Frame(self.root, bg="#f5f5f5", width=120)
         control_panel.pack(side="left", fill="y")
         tk.Label(control_panel, text="Brush Size:").pack(pady=(10,0))
-        self.brush_size_slider = tk.Scale(control_panel, from_=1, to=20, orient="horizontal")
+        self.brush_size_slider = tk.Scale(control_panel, from_=1, to=20, 
+                                         orient="horizontal",
+                                         command=self.update_brush_size)
         self.brush_size_slider.set(self.pen_size)
         self.brush_size_slider.pack(pady=(0,10))
         tk.Label(control_panel, text="Brush Color:").pack()
         self.color_btn = tk.Button(control_panel, text="Choose Color", command=self.choose_color)
         self.color_btn.pack(pady=(0,10))
+        
+        # Keyboard shortcuts
+        self.root.bind("<Control-o>", lambda e: self.open_image())
+        self.root.bind("<Control-s>", lambda e: self.save_image())
+        self.root.bind("<Control-z>", lambda e: self.undo_action())
+        self.root.bind("<Control-y>", lambda e: self.redo_action())
+
+        # Initialize filter classes
+        self.linear_filters = LinearFilters()
+        self.nonlinear_filters = NonLinearFilters()
+        self.edge_detection = EdgeDetection()
+
+    # ========== IMAGE FORMAT CONVERSION ==========
+    def pil_to_cv(self, pil_image):
+        """Convert PIL Image to OpenCV format (RGB to BGR)"""
+        return cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+
+    def cv_to_pil(self, cv_image):
+        """Convert OpenCV image to PIL format (BGR to RGB)"""
+        return Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+
+    # ========== BRUSH SIZE UPDATE ==========
+    def update_brush_size(self, value):
+        """Update brush size from slider in real-time"""
+        self.pen_size = int(float(value))
+        self.status.config(text=f"Brush Size: {self.pen_size}")
+
+    # ========== UNDO/REDO ==========
     def undo_action(self):
         if self.undo_stack:
             item = self.undo_stack.pop()
             self.redo_stack.append(item)
             self.canvas.delete(item['id'])
+            self.status.config(text="Undo successful")
         else:
-            pass
+            self.status.config(text="Nothing to undo")
 
     def redo_action(self):
         if self.redo_stack:
             item = self.redo_stack.pop()
             if item.get('type') == 'emoji':
-                obj = self.canvas.create_text(item['x'], item['y'], text=item['emoji'], font=("Arial", item['size']))
+                obj = self.canvas.create_text(item['x'], item['y'], 
+                                             text=item['emoji'], 
+                                             font=("Arial", item['size']))
                 item['id'] = obj
                 self.undo_stack.append(item)
             elif item.get('type') == 'line':
-                obj = self.canvas.create_line(item['coords'], fill=item['color'], width=item['width'], capstyle="round")
+                obj = self.canvas.create_line(item['coords'], 
+                                             fill=item['color'], 
+                                             width=item['width'], 
+                                             capstyle="round",
+                                             smooth=True)
                 item['id'] = obj
                 self.undo_stack.append(item)
-            pass
+            self.status.config(text="Redo successful")
         else:
-            pass
-        # ---- Canvas Area ----
-        self.canvas = tk.Canvas(self.root, bg="lightgray")
-        self.canvas.pack(fill="both", expand=True)
+            self.status.config(text="Nothing to redo")
 
-        # Bind mouse events
-        self.canvas.bind("<ButtonPress-1>", self.start_draw)
-        self.canvas.bind("<B1-Motion>", self.paint)
-        self.canvas.bind("<ButtonRelease-1>", self.stop_draw)
-
-        # Status bar
-        self.status = tk.Label(self.root, text="Ready", bd=1, relief="sunken", anchor="w")
-        self.status.pack(side="bottom", fill="x")
-
+    # ========== EMOJI ==========
     def add_emoji_mode(self):
-        # Show emoji selection dialog with both scrollbars and text entry for size
         emojis = [
-            "😀", "😂", "😍", "😎", "🥳", "😜", "🤩", "😭", "😡", "👍", "👀", "🎉", "💖", "🔥", "🤖",
-            "😇", "😏", "😱", "😴", "😈", "👻", "💩", "🙈", "🙉", "🙊", "🐶", "🐱", "🦄", "🍕", "🍔", "🍟",
-            "🍦", "🍩", "🍉", "🍓", "🍒", "🍇", "🍌", "🍍", "🥑", "🥦", "🥕", "🌈", "⭐", "⚡", "☀️", "🌙"
+            "😀", "😂", "😍", "😎", "🥳", "😜", "🤩", "😭", "😡", "👍", 
+            "👀", "🎉", "💖", "🔥", "🤖", "😇", "😏", "😱", "😴", "😈", 
+            "👻", "💩", "🙈", "🙉", "🙊", "🐶", "🐱", "🦄", "🍕", "🍔", 
+            "🍟", "🍦", "🍩", "🍉", "🍓", "🍒", "🍇", "🍌", "🍍", "🥑", 
+            "🥦", "🥕", "🌈", "⭐", "⚡", "☀️", "🌙"
         ]
         self.selected_emoji = None
         self.emoji_size = 32
+        
         def select_emoji(e):
             self.selected_emoji = e
             self.emoji_size = size_scale.get()
@@ -137,9 +198,9 @@ class SmartImageEditor:
         hsb.pack(side="bottom", fill="x")
         canvas.create_window((0,0), window=frame, anchor="nw")
 
-        # Grid: 8 columns for horizontal scroll
         for i, emoji in enumerate(emojis):
-            btn = tk.Button(frame, text=emoji, font=("Arial", 24), command=lambda e=emoji: select_emoji(e))
+            btn = tk.Button(frame, text=emoji, font=("Arial", 24), 
+                          command=lambda e=emoji: select_emoji(e))
             btn.grid(row=i//8, column=i%8, padx=5, pady=5)
 
         def on_frame_configure(event):
@@ -153,73 +214,146 @@ class SmartImageEditor:
 
     def place_emoji(self, event):
         x, y = event.x, event.y
-        obj = self.canvas.create_text(x, y, text=self.selected_emoji, font=("Arial", self.emoji_size))
-        self.undo_stack.append({'type': 'emoji', 'x': x, 'y': y, 'emoji': self.selected_emoji, 'size': self.emoji_size, 'id': obj})
+        obj = self.canvas.create_text(x, y, text=self.selected_emoji, 
+                                     font=("Arial", self.emoji_size))
+        self.undo_stack.append({
+            'type': 'emoji', 
+            'x': x, 
+            'y': y, 
+            'emoji': self.selected_emoji, 
+            'size': self.emoji_size, 
+            'id': obj
+        })
+        self.redo_stack.clear()
         self.canvas.unbind("<Button-1>")
+        # Re-bind drawing events
+        self.canvas.bind("<ButtonPress-1>", self.start_draw)
+        self.canvas.bind("<B1-Motion>", self.paint)
+        self.canvas.bind("<ButtonRelease-1>", self.stop_draw)
 
-    # ---- Functions ----
+    # ========== FILE OPERATIONS ==========
     def open_image(self):
-        path = filedialog.askopenfilename(filetypes=[("Image Files", "*.jpg *.png *.jpeg")])
+        path = filedialog.askopenfilename(
+            filetypes=[("Image Files", "*.jpg *.png *.jpeg *.bmp *.gif")]
+        )
         if path:
             self.file_path = path
             self.image = Image.open(path)
+            self.original_image = self.image.copy()  # ✅ ADD THIS LINE!
             self.display_image()
             self.status.config(text=f"Opened: {path}")
 
     def display_image(self):
         if self.image:
-            # Add image resize option with draggable scale
-            resize_win = tk.Toplevel(self.root)
-            resize_win.title("Resize Image")
-            w, h = self.image.size
-            tk.Label(resize_win, text="Width:").pack()
-            width_scale = tk.Scale(resize_win, from_=int(w/4), to=int(w*2), orient="horizontal")
-            width_scale.set(w)
-            width_scale.pack()
-            tk.Label(resize_win, text="Height:").pack()
-            height_scale = tk.Scale(resize_win, from_=int(h/4), to=int(h*2), orient="horizontal")
-            height_scale.set(h)
-            height_scale.pack()
-            def apply_resize():
-                try:
-                    new_w = width_scale.get()
-                    new_h = height_scale.get()
-                    self.image = self.image.resize((new_w, new_h), Image.ANTIALIAS)
-                except Exception:
-                    pass
-                resize_win.destroy()
-            tk.Button(resize_win, text="Resize", command=apply_resize).pack(pady=10)
-            resize_win.grab_set()
-            self.root.wait_window(resize_win)
+            # Clear canvas first
+            self.canvas.delete("all")
+            
+            # Get canvas size
+            self.root.update()
+            canvas_width = self.canvas.winfo_width()
+            canvas_height = self.canvas.winfo_height()
+            
+            # Get image size
+            img_width, img_height = self.image.size
+            
+            # Calculate scale to fit canvas
+            padding = 50
+            scale = min((canvas_width-padding)/img_width, 
+                       (canvas_height-padding)/img_height, 1.0)
+            new_width = int(img_width * scale)
+            new_height = int(img_height * scale)
+            
+            # Ask user for custom size (optional)
+            use_auto = messagebox.askyesno(
+                "Resize Image", 
+                f"Auto-resize to {new_width}x{new_height} to fit canvas?\n\n" +
+                "Click 'No' for custom size."
+            )
+            
+            if not use_auto:
+                # Show resize dialog
+                resize_win = tk.Toplevel(self.root)
+                resize_win.title("Resize Image")
+                resize_win.geometry("300x200")
+                
+                tk.Label(resize_win, text="Width:").pack()
+                width_scale = tk.Scale(resize_win, from_=int(img_width/4), 
+                                      to=int(img_width*2), orient="horizontal")
+                width_scale.set(new_width)
+                width_scale.pack()
+                
+                tk.Label(resize_win, text="Height:").pack()
+                height_scale = tk.Scale(resize_win, from_=int(img_height/4), 
+                                       to=int(img_height*2), orient="horizontal")
+                height_scale.set(new_height)
+                height_scale.pack()
+                
+                def apply_resize():
+                    nonlocal new_width, new_height
+                    new_width = width_scale.get()
+                    new_height = height_scale.get()
+                    resize_win.destroy()
+                
+                tk.Button(resize_win, text="Apply", command=apply_resize).pack(pady=10)
+                resize_win.grab_set()
+                self.root.wait_window(resize_win)
+            
+            # Resize image
+            self.image = self.image.resize((new_width, new_height), Image.LANCZOS)
+            
+            # Center image on canvas
             self.tk_image = ImageTk.PhotoImage(self.image)
-            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
+            x = (canvas_width - new_width) // 2
+            y = (canvas_height - new_height) // 2
+            self.canvas.create_image(x, y, anchor="nw", image=self.tk_image, tags="image")
+            
+            self.status.config(text=f"Image loaded: {new_width}x{new_height}")
+            
+    def reset_to_original(self):
+        """Reset image to original (undo all filters)"""
+        if hasattr(self, 'original_image') and self.original_image:  # ✅ INDENTED!
+            self.image = self.original_image.copy()
+            self.display_image()
+            self.status.config(text="Reset to original image")
+        else:
+            messagebox.showinfo("No Original", "No original image to reset to!")     
 
     def save_image(self):
-        # Save the canvas content (including drawings and emojis) using pyscreenshot
-        self.root.update()
-        x = self.canvas.winfo_rootx()
-        y = self.canvas.winfo_rooty()
-        w = self.canvas.winfo_width()
-        h = self.canvas.winfo_height()
-        path = filedialog.asksaveasfilename(defaultextension=".png",
-                                            filetypes=[("PNG files", "*.png"), ("JPEG files", "*.jpg")])
+        path = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG files", "*.png"), ("JPEG files", "*.jpg")]
+        )
+        
         if path:
             try:
-                import pyscreenshot as ImageGrab
+                # Update canvas
+                self.root.update()
+                
+                # Get canvas coordinates
+                x = self.canvas.winfo_rootx()
+                y = self.canvas.winfo_rooty()
+                w = self.canvas.winfo_width()
+                h = self.canvas.winfo_height()
+                
+                # Capture using pyscreenshot
                 img = ImageGrab.grab(bbox=(x, y, x + w, y + h))
                 img.save(path)
+                
                 self.status.config(text=f"Saved: {path}")
+                messagebox.showinfo("Success", f"Image saved to:\n{path}")
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to save image: {e}")
+                messagebox.showerror("Error", f"Failed to save image:\n{e}")
 
+    # ========== DRAWING ==========
     def choose_color(self):
         color = colorchooser.askcolor(title="Choose drawing color")
         if color[1]:
             self.pen_color = color[1]
+            self.color_btn.config(bg=self.pen_color)
             self.status.config(text=f"Selected Color: {self.pen_color}")
 
     def enable_draw(self):
-        self.status.config(text="Drawing mode enabled")
+        self.status.config(text="Drawing mode enabled - Click and drag to draw")
 
     def start_draw(self, event):
         self.drawing = True
@@ -228,18 +362,138 @@ class SmartImageEditor:
     def paint(self, event):
         if self.drawing:
             x, y = event.x, event.y
-            obj = self.canvas.create_line(self.last_x, self.last_y, x, y,
-                                    fill=self.pen_color, width=self.pen_size, capstyle="round")
-            self.undo_stack.append({'type': 'line', 'coords': (self.last_x, self.last_y, x, y), 'color': self.pen_color, 'width': self.pen_size, 'id': obj})
+            self.pen_size = self.brush_size_slider.get()
+            
+            obj = self.canvas.create_line(
+                self.last_x, self.last_y, x, y,
+                fill=self.pen_color, 
+                width=self.pen_size, 
+                capstyle="round",
+                smooth=True
+            )
+            
+            self.undo_stack.append({
+                'type': 'line', 
+                'coords': (self.last_x, self.last_y, x, y), 
+                'color': self.pen_color, 
+                'width': self.pen_size, 
+                'id': obj
+            })
+            
             self.last_x, self.last_y = x, y
+            self.redo_stack.clear()
 
     def stop_draw(self, event):
         self.drawing = False
         self.last_x, self.last_y = None, None
 
     def clear_canvas(self):
-        self.canvas.delete("all")
-        self.status.config(text="Canvas cleared")
+        if messagebox.askyesno("Clear Canvas", 
+                              "Are you sure? This cannot be undone!"):
+            self.canvas.delete("all")
+            self.undo_stack.clear()
+            self.redo_stack.clear()
+            self.status.config(text="Canvas cleared")
+
+    # ========== FILTER METHODS ==========
+    def apply_mean_filter(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            filtered = self.linear_filters.mean_filter(cv_img, kernel_size=5)
+            self.image = self.cv_to_pil(filtered)
+            self.display_image()
+            self.status.config(text="Mean filter applied (kernel size: 5)")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply filter:\n{e}")
+
+    def apply_gaussian_filter(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            filtered = self.linear_filters.gaussian_filter(cv_img, kernel_size=5, sigma=1.5)
+            self.image = self.cv_to_pil(filtered)
+            self.display_image()
+            self.status.config(text="Gaussian blur applied (kernel: 5, sigma: 1.5)")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply filter:\n{e}")
+
+    def apply_sharpen_filter(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            filtered = self.linear_filters.sharpen_filter(cv_img)
+            self.image = self.cv_to_pil(filtered)
+            self.display_image()
+            self.status.config(text="Sharpen filter applied")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply filter:\n{e}")
+
+    def apply_median_filter(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            filtered = self.nonlinear_filters.median_filter(cv_img, kernel_size=5)
+            self.image = self.cv_to_pil(filtered)
+            self.display_image()
+            self.status.config(text="Median filter applied (kernel size: 5)")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply filter:\n{e}")
+
+    def apply_sobel(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            filtered = self.edge_detection.sobel_edge(cv_img)
+            self.image = self.cv_to_pil(filtered)
+            self.display_image()
+            self.status.config(text="Sobel edge detection applied")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply filter:\n{e}")
+
+    def apply_prewitt(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            filtered = self.edge_detection.prewitt_edge(cv_img)
+            self.image = self.cv_to_pil(filtered)
+            self.display_image()
+            self.status.config(text="Prewitt edge detection applied")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply filter:\n{e}")
+
+    def apply_laplacian(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            filtered = self.edge_detection.laplacian_edge(cv_img)
+            self.image = self.cv_to_pil(filtered)
+            self.display_image()
+            self.status.config(text="Laplacian edge detection applied")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply filter:\n{e}")
+
 
 # ---- Run the App ----
 if __name__ == "__main__":
