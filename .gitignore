@@ -179,3 +179,41 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+ GNU nano 8.5                                                .gitignore
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+# Test output files (Image Processing Project)
+output_*.jpg
+output_*.png
+output_*.jpeg
+
+# Test images
+111.png
+photo.jpeg
+test.jpg
+
+# Virtual environments
+.venv/
+.venv-1/
+venv/
+env/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
