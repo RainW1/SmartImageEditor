@@ -83,3 +83,15 @@ def apply_adaptive_threshold(image):
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     thresholded_image = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
     return thresholded_image # Langsung kembalikan hasil grayscale
+
+def apply_average_blur(image, kernel_size=5):
+    if kernel_size % 2 == 0: kernel_size += 1
+    return cv2.blur(image, (kernel_size, kernel_size))
+
+def apply_gaussian_blur(image, kernel_size=5):
+    if kernel_size % 2 == 0: kernel_size += 1
+    return cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
+
+def apply_median_blur(image, kernel_size=5):
+    if kernel_size % 2 == 0: kernel_size += 1
+    return cv2.medianBlur(image, kernel_size)
