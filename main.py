@@ -4,7 +4,7 @@ from PIL import Image, ImageTk
 import pyscreenshot as ImageGrab
 import cv2
 import numpy as np
-from filters import LinearFilters, NonLinearFilters, EdgeDetection
+from filters import LinearFilters, NonLinearFilters, EdgeDetection, GeometricTransforms
 
 
 class SmartImageEditor:
@@ -15,7 +15,7 @@ class SmartImageEditor:
 
         # ---- Variables ----
         self.image = None
-        self.original_image = None  # ✅ ADD THIS!
+        self.original_image = None
         self.tk_image = None
         self.file_path = None
         self.drawing = False
@@ -38,8 +38,8 @@ class SmartImageEditor:
         # Edit Menu
         edit_menu = tk.Menu(self.menu, tearoff=0)
         self.menu.add_cascade(label="Edit", menu=edit_menu)
-        edit_menu.add_command(label="Reset to Original", command=self.reset_to_original)  # ✅ ADD THIS!
-        edit_menu.add_separator()  # ✅ ADD THIS!
+        edit_menu.add_command(label="Reset to Original", command=self.reset_to_original)
+        edit_menu.add_separator()
         edit_menu.add_command(label="Choose Color", command=self.choose_color)
         edit_menu.add_command(label="Clear Canvas", command=self.clear_canvas)
 
@@ -63,6 +63,20 @@ class SmartImageEditor:
         edge_menu.add_command(label="Sobel Edge", command=self.apply_sobel)
         edge_menu.add_command(label="Prewitt Edge", command=self.apply_prewitt)
         edge_menu.add_command(label="Laplacian Edge", command=self.apply_laplacian)
+
+        # Transform Menu
+        transform_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Transform", menu=transform_menu)
+        transform_menu.add_command(label="Crop...", command=self.crop_image_dialog)
+        transform_menu.add_command(label="Resize...", command=self.resize_image_dialog)
+        transform_menu.add_separator()
+        transform_menu.add_command(label="Rotate 90° CW", command=lambda: self.rotate_90_degrees(3))
+        transform_menu.add_command(label="Rotate 90° CCW", command=lambda: self.rotate_90_degrees(1))
+        transform_menu.add_command(label="Rotate 180°", command=lambda: self.rotate_90_degrees(2))
+        transform_menu.add_command(label="Rotate Custom...", command=self.rotate_custom_dialog)
+        transform_menu.add_separator()
+        transform_menu.add_command(label="Flip Horizontal", command=lambda: self.flip_image(1))
+        transform_menu.add_command(label="Flip Vertical", command=lambda: self.flip_image(0))
 
         # ---- Canvas Area ----
         self.canvas = tk.Canvas(self.root, bg="lightgray")
@@ -114,6 +128,7 @@ class SmartImageEditor:
         self.linear_filters = LinearFilters()
         self.nonlinear_filters = NonLinearFilters()
         self.edge_detection = EdgeDetection()
+        self.geometric_transforms = GeometricTransforms()
 
     # ========== IMAGE FORMAT CONVERSION ==========
     def pil_to_cv(self, pil_image):
@@ -239,7 +254,7 @@ class SmartImageEditor:
         if path:
             self.file_path = path
             self.image = Image.open(path)
-            self.original_image = self.image.copy()  # ✅ ADD THIS LINE!
+            self.original_image = self.image.copy()
             self.display_image()
             self.status.config(text=f"Opened: {path}")
 
@@ -311,7 +326,7 @@ class SmartImageEditor:
             
     def reset_to_original(self):
         """Reset image to original (undo all filters)"""
-        if hasattr(self, 'original_image') and self.original_image:  # ✅ INDENTED!
+        if hasattr(self, 'original_image') and self.original_image:
             self.image = self.original_image.copy()
             self.display_image()
             self.status.config(text="Reset to original image")
@@ -494,9 +509,165 @@ class SmartImageEditor:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to apply filter:\n{e}")
 
+    # ========== GEOMETRIC TRANSFORMS ==========
+    def crop_image_dialog(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        crop_win = tk.Toplevel(self.root)
+        crop_win.title("Crop Image")
+        crop_win.geometry("300x250")
+        
+        h, w = self.pil_to_cv(self.image).shape[:2]
+        
+        tk.Label(crop_win, text=f"Image Size: {w} x {h}").pack(pady=5)
+        
+        tk.Label(crop_win, text="X (Left):").pack()
+        x_scale = tk.Scale(crop_win, from_=0, to=w-1, orient="horizontal")
+        x_scale.pack()
+        
+        tk.Label(crop_win, text="Y (Top):").pack()
+        y_scale = tk.Scale(crop_win, from_=0, to=h-1, orient="horizontal")
+        y_scale.pack()
+        
+        tk.Label(crop_win, text="Width:").pack()
+        w_scale = tk.Scale(crop_win, from_=1, to=w, orient="horizontal")
+        w_scale.set(w//2)
+        w_scale.pack()
+        
+        tk.Label(crop_win, text="Height:").pack()
+        h_scale = tk.Scale(crop_win, from_=1, to=h, orient="horizontal")
+        h_scale.set(h//2)
+        h_scale.pack()
+        
+        def apply_crop():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                cropped = self.geometric_transforms.crop_image(
+                    cv_img, x_scale.get(), y_scale.get(), 
+                    w_scale.get(), h_scale.get()
+                )
+                self.image = self.cv_to_pil(cropped)
+                self.display_image()
+                self.status.config(text="Image cropped")
+                crop_win.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to crop:\n{e}")
+        
+        tk.Button(crop_win, text="Apply Crop", command=apply_crop).pack(pady=10)
+    
+    def resize_image_dialog(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        resize_win = tk.Toplevel(self.root)
+        resize_win.title("Resize Image")
+        resize_win.geometry("300x200")
+        
+        w, h = self.image.size
+        
+        tk.Label(resize_win, text=f"Current Size: {w} x {h}").pack(pady=5)
+        
+        tk.Label(resize_win, text="New Width:").pack()
+        width_scale = tk.Scale(resize_win, from_=50, to=w*2, orient="horizontal")
+        width_scale.set(w)
+        width_scale.pack()
+        
+        tk.Label(resize_win, text="New Height:").pack()
+        height_scale = tk.Scale(resize_win, from_=50, to=h*2, orient="horizontal")
+        height_scale.set(h)
+        height_scale.pack()
+        
+        def apply_resize():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                resized = self.geometric_transforms.resize_image(
+                    cv_img, width=width_scale.get(), height=height_scale.get()
+                )
+                self.image = self.cv_to_pil(resized)
+                self.display_image()
+                self.status.config(text=f"Resized to {width_scale.get()}x{height_scale.get()}")
+                resize_win.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to resize:\n{e}")
+        
+        tk.Button(resize_win, text="Apply Resize", command=apply_resize).pack(pady=10)
+    
+    def rotate_90_degrees(self, k):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            rotated = self.geometric_transforms.rotate_90(cv_img, k)
+            self.image = self.cv_to_pil(rotated)
+            self.display_image()
+            angle = k * 90
+            self.status.config(text=f"Rotated {angle}° counter-clockwise")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to rotate:\n{e}")
+    
+    def rotate_custom_dialog(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        rotate_win = tk.Toplevel(self.root)
+        rotate_win.title("Custom Rotation")
+        rotate_win.geometry("300x200")
+        
+        tk.Label(rotate_win, text="Rotation Angle (degrees):").pack(pady=5)
+        angle_scale = tk.Scale(rotate_win, from_=-180, to=180, orient="horizontal")
+        angle_scale.set(0)
+        angle_scale.pack()
+        
+        tk.Label(rotate_win, text="Scale:").pack()
+        scale_scale = tk.Scale(rotate_win, from_=0.1, to=2.0, resolution=0.1, orient="horizontal")
+        scale_scale.set(1.0)
+        scale_scale.pack()
+        
+        keep_size_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(rotate_win, text="Keep original size", variable=keep_size_var).pack()
+        
+        def apply_rotation():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                rotated = self.geometric_transforms.rotate_image(
+                    cv_img, angle_scale.get(), 
+                    scale=scale_scale.get(),
+                    keep_size=keep_size_var.get()
+                )
+                self.image = self.cv_to_pil(rotated)
+                self.display_image()
+                self.status.config(text=f"Rotated {angle_scale.get()}°")
+                rotate_win.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to rotate:\n{e}")
+        
+        tk.Button(rotate_win, text="Apply Rotation", command=apply_rotation).pack(pady=10)
+    
+    def flip_image(self, flip_code):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            flipped = self.geometric_transforms.flip_image(cv_img, flip_code)
+            self.image = self.cv_to_pil(flipped)
+            self.display_image()
+            flip_type = "Horizontal" if flip_code == 1 else "Vertical"
+            self.status.config(text=f"Flipped {flip_type}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to flip:\n{e}")
+
 
 # ---- Run the App ----
 if __name__ == "__main__":
     root = tk.Tk()
     app = SmartImageEditor(root)
-    root.mainloop()
+    root.mainloop() 
+                
