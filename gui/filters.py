@@ -169,3 +169,107 @@ class GeometricTransforms:
             k: Number of 90-degree rotations (1=90°, 2=180°, 3=270°)
         """
         return np.rot90(image, k)
+
+class MorphologicalFilters:
+    """Class for morphological operations on images"""
+    
+    @staticmethod
+    def create_kernel(kernel_size=(5, 5), kernel_type="rect"):
+        """
+        Create structuring element (kernel) for morphological operations
+        
+        Args:
+            kernel_size: Size of kernel (width, height)
+            kernel_type: Type of kernel - "rect", "ellipse", or "cross"
+        
+        Returns:
+            Kernel/structuring element
+        """
+        if kernel_type == "rect":
+            return cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
+        elif kernel_type == "ellipse":
+            return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, kernel_size)
+        elif kernel_type == "cross":
+            return cv2.getStructuringElement(cv2.MORPH_CROSS, kernel_size)
+        else:
+            raise ValueError("Kernel type must be 'rect', 'ellipse', or 'cross'")
+    
+    @staticmethod
+    def erosion(image, kernel_size=(5, 5), kernel_type="rect", iterations=1):
+        """
+        Erosion: Shrinks foreground objects, removes small noise
+        Best for: Removing small white noise, separating objects
+        """
+        kernel = MorphologicalFilters.create_kernel(kernel_size, kernel_type)
+        return cv2.erode(image, kernel, iterations=iterations)
+    
+    @staticmethod
+    def dilation(image, kernel_size=(5, 5), kernel_type="rect", iterations=1):
+        """
+        Dilation: Expands foreground objects, fills small gaps
+        Best for: Connecting broken lines, filling small holes
+        """
+        kernel = MorphologicalFilters.create_kernel(kernel_size, kernel_type)
+        return cv2.dilate(image, kernel, iterations=iterations)
+    
+    @staticmethod
+    def opening(image, kernel_size=(5, 5), kernel_type="rect"):
+        """
+        Opening: Erosion followed by Dilation
+        Best for: Removing background noise while preserving shape
+        """
+        kernel = MorphologicalFilters.create_kernel(kernel_size, kernel_type)
+        return cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
+    
+    @staticmethod
+    def closing(image, kernel_size=(5, 5), kernel_type="rect"):
+        """
+        Closing: Dilation followed by Erosion
+        Best for: Filling holes in foreground objects
+        """
+        kernel = MorphologicalFilters.create_kernel(kernel_size, kernel_type)
+        return cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel)
+    
+    @staticmethod
+    def morphological_gradient(image, kernel_size=(5, 5), kernel_type="rect"):
+        """
+        Morphological Gradient: Dilation - Erosion
+        Best for: Edge detection, extracting object boundaries
+        """
+        kernel = MorphologicalFilters.create_kernel(kernel_size, kernel_type)
+        return cv2.morphologyEx(image, cv2.MORPH_GRADIENT, kernel)
+    
+    @staticmethod
+    def top_hat(image, kernel_size=(5, 5), kernel_type="rect"):
+        """
+        Top Hat: Original - Opening
+        Best for: Extracting small bright details from dark background
+        """
+        kernel = MorphologicalFilters.create_kernel(kernel_size, kernel_type)
+        return cv2.morphologyEx(image, cv2.MORPH_TOPHAT, kernel)
+    
+    @staticmethod
+    def black_hat(image, kernel_size=(5, 5), kernel_type="rect"):
+        """
+        Black Hat: Closing - Original
+        Best for: Extracting small dark details from bright background
+        """
+        kernel = MorphologicalFilters.create_kernel(kernel_size, kernel_type)
+        return cv2.morphologyEx(image, cv2.MORPH_BLACKHAT, kernel)
+    
+    @staticmethod
+    def preprocess_for_morphology(image):
+        """
+        Convert image to binary for morphological operations
+        Returns both grayscale and binary versions
+        """
+        # Convert to grayscale if color
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image.copy()
+        
+        # Apply binary threshold
+        _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+        
+        return gray, binary

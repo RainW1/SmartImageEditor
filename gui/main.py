@@ -1,4 +1,6 @@
 import tkinter as tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 from tkinter import filedialog, colorchooser, messagebox
 from PIL import Image, ImageTk
 import pyscreenshot as ImageGrab
@@ -10,7 +12,8 @@ import os
 # Add parent directory to path untuk import features
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from filters import LinearFilters, NonLinearFilters, EdgeDetection, GeometricTransforms
+from filters import LinearFilters, NonLinearFilters, EdgeDetection, GeometricTransforms, MorphologicalFilters
+from features.frequency_domain import FrequencyDomainAnalysis
 from features.color_enhancement import *
 from features.ai_filters import (
     AIColorCorrection, 
@@ -92,6 +95,29 @@ class SmartImageEditor:
         transform_menu.add_separator()
         transform_menu.add_command(label="Flip Horizontal", command=lambda: self.flip_image(1))
         transform_menu.add_command(label="Flip Vertical", command=lambda: self.flip_image(0))
+        
+        # Morphological Operations Menu
+        morpho_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Morphological", menu=morpho_menu)
+        morpho_menu.add_command(label="Erosion...", command=self.apply_erosion_dialog)
+        morpho_menu.add_command(label="Dilation...", command=self.apply_dilation_dialog)
+        morpho_menu.add_separator()
+        morpho_menu.add_command(label="Opening...", command=self.apply_opening_dialog)
+        morpho_menu.add_command(label="Closing...", command=self.apply_closing_dialog)
+        morpho_menu.add_separator()
+        morpho_menu.add_command(label="Morphological Gradient...", command=self.apply_gradient_dialog)
+        morpho_menu.add_command(label="Top Hat...", command=self.apply_tophat_dialog)
+        morpho_menu.add_command(label="Black Hat...", command=self.apply_blackhat_dialog)
+        morpho_menu.add_separator()
+        morpho_menu.add_command(label="All Operations (View)", command=self.show_all_morphological)
+
+        # Frequency Domain Menu
+        freq_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Frequency", menu=freq_menu)
+        freq_menu.add_command(label="View Frequency Analysis", command=self.show_frequency_analysis)
+        freq_menu.add_separator()
+        freq_menu.add_command(label="Low-Pass Filter (Blur)...", command=self.apply_lowpass_filter_dialog)
+        freq_menu.add_command(label="High-Pass Filter (Edges)...", command=self.apply_highpass_filter_dialog)
 
         # Color Enhancement Menu
         color_menu = tk.Menu(self.menu, tearoff=0)
@@ -183,6 +209,8 @@ class SmartImageEditor:
         self.nonlinear_filters = NonLinearFilters()
         self.edge_detection = EdgeDetection()
         self.geometric_transforms = GeometricTransforms()
+        self.morphological = MorphologicalFilters()
+        self.frequency_analysis = FrequencyDomainAnalysis()
 
     def pil_to_cv(self, pil_image):
         return cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
@@ -1085,6 +1113,261 @@ class SmartImageEditor:
                  command=apply_transfer, bg="#9C27B0", fg="white",
                  font=("Arial", 10, "bold")).pack(pady=20)
 
+    def morphological_operation_dialog(self, operation_name, operation_func):
+        """Generic dialog for morphological operations"""
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"{operation_name}")
+        dialog.geometry("350x300")
+        
+        tk.Label(dialog, text=f"🔲 {operation_name}", 
+                font=("Arial", 12, "bold")).pack(pady=10)
+        
+        # Kernel size
+        tk.Label(dialog, text="Kernel Size (3-15, odd numbers):").pack(pady=(10,0))
+        size_scale = tk.Scale(dialog, from_=3, to=15, resolution=2, orient="horizontal")
+        size_scale.set(5)
+        size_scale.pack()
+        
+        # Kernel type
+        tk.Label(dialog, text="Kernel Type:").pack(pady=(10,0))
+        kernel_var = tk.StringVar(value="rect")
+        tk.Radiobutton(dialog, text="Rectangle", variable=kernel_var, value="rect").pack(anchor="w", padx=50)
+        tk.Radiobutton(dialog, text="Ellipse", variable=kernel_var, value="ellipse").pack(anchor="w", padx=50)
+        tk.Radiobutton(dialog, text="Cross", variable=kernel_var, value="cross").pack(anchor="w", padx=50)
+        
+        # Iterations (for erosion/dilation)
+        if operation_name in ["Erosion", "Dilation"]:
+            tk.Label(dialog, text="Iterations (1-5):").pack(pady=(10,0))
+            iter_scale = tk.Scale(dialog, from_=1, to=5, orient="horizontal")
+            iter_scale.set(1)
+            iter_scale.pack()
+        
+        def apply_operation():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                kernel_size = (size_scale.get(), size_scale.get())
+                kernel_type = kernel_var.get()
+                
+                # For erosion/dilation with iterations
+                if operation_name in ["Erosion", "Dilation"]:
+                    result = operation_func(cv_img, kernel_size, kernel_type, iter_scale.get())
+                else:
+                    result = operation_func(cv_img, kernel_size, kernel_type)
+                
+                self.image = self.cv_to_pil(result)
+                self.display_image()
+                self.status.config(text=f"✅ {operation_name} applied")
+                dialog.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to apply {operation_name}:\n{e}")
+        
+        tk.Button(dialog, text=f"Apply {operation_name}", 
+                 command=apply_operation, bg="#2196F3", fg="white",
+                 font=("Arial", 10, "bold")).pack(pady=20)
+    
+    def apply_erosion_dialog(self):
+        self.morphological_operation_dialog("Erosion", self.morphological.erosion)
+    
+    def apply_dilation_dialog(self):
+        self.morphological_operation_dialog("Dilation", self.morphological.dilation)
+    
+    def apply_opening_dialog(self):
+        self.morphological_operation_dialog("Opening", self.morphological.opening)
+    
+    def apply_closing_dialog(self):
+        self.morphological_operation_dialog("Closing", self.morphological.closing)
+    
+    def apply_gradient_dialog(self):
+        self.morphological_operation_dialog("Morphological Gradient", 
+                                           self.morphological.morphological_gradient)
+    
+    def apply_tophat_dialog(self):
+        self.morphological_operation_dialog("Top Hat", self.morphological.top_hat)
+    
+    def apply_blackhat_dialog(self):
+        self.morphological_operation_dialog("Black Hat", self.morphological.black_hat)
+    
+    def show_all_morphological(self):
+        """Show all morphological operations in one window"""
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            
+            # Apply all operations
+            kernel_size = (5, 5)
+            kernel_type = "rect"
+            
+            results = {
+                "Original": cv_img,
+                "Erosion": self.morphological.erosion(cv_img, kernel_size, kernel_type),
+                "Dilation": self.morphological.dilation(cv_img, kernel_size, kernel_type),
+                "Opening": self.morphological.opening(cv_img, kernel_size, kernel_type),
+                "Closing": self.morphological.closing(cv_img, kernel_size, kernel_type),
+                "Gradient": self.morphological.morphological_gradient(cv_img, kernel_size, kernel_type),
+                "Top Hat": self.morphological.top_hat(cv_img, kernel_size, kernel_type),
+                "Black Hat": self.morphological.black_hat(cv_img, kernel_size, kernel_type)
+            }
+            
+            # Create comparison window
+            comp_win = tk.Toplevel(self.root)
+            comp_win.title("Morphological Operations Comparison")
+            comp_win.geometry("1200x800")
+            
+            # Create matplotlib figure
+            fig = Figure(figsize=(12, 8))
+            
+            for i, (name, img) in enumerate(results.items(), 1):
+                ax = fig.add_subplot(3, 3, i)
+                if len(img.shape) == 3:
+                    ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                else:
+                    ax.imshow(img, cmap='gray')
+                ax.set_title(name)
+                ax.axis('off')
+            
+            fig.tight_layout()
+            
+            # Embed in tkinter
+            canvas = FigureCanvasTkAgg(fig, comp_win)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            
+            self.status.config(text="✅ Morphological comparison displayed")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to show morphological operations:\n{e}")
+    
+    
+    # ---- FREQUENCY DOMAIN FUNCTIONS ----
+    
+    def show_frequency_analysis(self):
+        """Show frequency domain analysis of current image"""
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            
+            # Create visualization
+            fig = self.frequency_analysis.visualize_frequency_analysis(cv_img)
+            
+            # Create window
+            freq_win = tk.Toplevel(self.root)
+            freq_win.title("Frequency Domain Analysis")
+            freq_win.geometry("1200x800")
+            
+            # Embed matplotlib figure
+            canvas = FigureCanvasTkAgg(fig, freq_win)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            
+            self.status.config(text="✅ Frequency analysis displayed")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to show frequency analysis:\n{e}")
+    
+    def apply_lowpass_filter_dialog(self):
+        """Low-pass filter dialog"""
+        self.frequency_filter_dialog("lowpass")
+    
+    def apply_highpass_filter_dialog(self):
+        """High-pass filter dialog"""
+        self.frequency_filter_dialog("highpass")
+    
+    def frequency_filter_dialog(self, filter_type):
+        """Generic frequency filter dialog"""
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        dialog = tk.Toplevel(self.root)
+        filter_name = "Low-Pass (Blur)" if filter_type == "lowpass" else "High-Pass (Edges)"
+        dialog.title(f"Frequency Domain - {filter_name}")
+        dialog.geometry("400x300")
+        
+        tk.Label(dialog, text=f"📊 {filter_name} Filter", 
+                font=("Arial", 12, "bold")).pack(pady=10)
+        
+        if filter_type == "lowpass":
+            desc = "Lower cutoff = more blur\nHigher cutoff = less blur"
+        else:
+            desc = "Lower cutoff = stronger edges\nHigher cutoff = weaker edges"
+        
+        tk.Label(dialog, text=desc, font=("Arial", 9)).pack(pady=5)
+        
+        # Cutoff frequency
+        tk.Label(dialog, text="Cutoff Frequency (10-100):").pack(pady=(10,0))
+        cutoff_scale = tk.Scale(dialog, from_=10, to=100, orient="horizontal")
+        cutoff_scale.set(30)
+        cutoff_scale.pack()
+        
+        # Preview button
+        preview_var = [None]  # Store preview window
+        
+        def show_preview():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                fig, _ = self.frequency_analysis.visualize_filter_comparison(
+                    cv_img, filter_type, cutoff_scale.get()
+                )
+                
+                # Close old preview if exists
+                if preview_var[0] is not None:
+                    try:
+                        preview_var[0].destroy()
+                    except:
+                        pass
+                
+                # Create preview window
+                preview_win = tk.Toplevel(dialog)
+                preview_win.title("Filter Preview")
+                preview_win.geometry("1200x800")
+                preview_var[0] = preview_win
+                
+                canvas = FigureCanvasTkAgg(fig, preview_win)
+                canvas.draw()
+                canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Preview failed:\n{e}")
+        
+        tk.Button(dialog, text="👁️ Preview", command=show_preview,
+                 bg="#FF9800", fg="white").pack(pady=10)
+        
+        def apply_filter():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                filtered, _, _ = self.frequency_analysis.apply_frequency_filter(
+                    cv_img, filter_type, cutoff_scale.get()
+                )
+                
+                self.image = self.cv_to_pil(filtered)
+                self.display_image()
+                self.status.config(text=f"✅ {filter_name} filter applied")
+                dialog.destroy()
+                
+                # Close preview if exists
+                if preview_var[0] is not None:
+                    try:
+                        preview_var[0].destroy()
+                    except:
+                        pass
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Filter failed:\n{e}")
+        
+        tk.Button(dialog, text=f"✅ Apply {filter_name}", 
+                 command=apply_filter, bg="#4CAF50", fg="white",
+                 font=("Arial", 10, "bold")).pack(pady=20)
+        
 
 
 if __name__ == "__main__":
