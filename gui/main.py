@@ -12,6 +12,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from filters import LinearFilters, NonLinearFilters, EdgeDetection, GeometricTransforms
 from features.color_enhancement import *
+from features.ai_filters import (
+    AIColorCorrection, 
+    BackgroundRemoval, 
+    StyleTransfer,
+    ai_color_correction,
+    remove_bg,
+    apply_style
+)
 
 
 class SmartImageEditor:
@@ -103,6 +111,30 @@ class SmartImageEditor:
         blur_menu.add_command(label="Average Blur...", command=self.apply_average_blur_dialog)
         blur_menu.add_command(label="Gaussian Blur...", command=self.apply_gaussian_blur_dialog)
         blur_menu.add_command(label="Median Blur...", command=self.apply_median_blur_dialog)
+        
+        # AI Filters Menu (NEW!)
+        ai_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="AI Filters", menu=ai_menu)
+        
+        ai_color_menu = tk.Menu(ai_menu, tearoff=0)
+        ai_menu.add_cascade(label="AI Color Correction", menu=ai_color_menu)
+        ai_color_menu.add_command(label="Full Color Correction...", command=self.ai_full_color_correction_dialog)
+        ai_color_menu.add_command(label="CLAHE Enhancement", command=self.apply_clahe_quick)
+        ai_color_menu.add_command(label="Auto White Balance", command=self.apply_white_balance)
+
+        # Background Removal submenu
+        bg_menu = tk.Menu(ai_menu, tearoff=0)
+        ai_menu.add_cascade(label="Background Removal", menu=bg_menu)
+        bg_menu.add_command(label="Portrait Mode", command=lambda: self.remove_bg_dialog("Portrait Mode"))
+        bg_menu.add_command(label="General Mode", command=lambda: self.remove_bg_dialog("General Mode"))
+        bg_menu.add_command(label="Product Mode", command=lambda: self.remove_bg_dialog("Product Mode"))
+        bg_menu.add_command(label="Anime Mode", command=lambda: self.remove_bg_dialog("Anime Mode"))
+        bg_menu.add_separator()
+        bg_menu.add_command(label="Custom Settings...", command=self.remove_bg_custom_dialog)
+
+        # Style Transfer
+        ai_menu.add_separator()
+        ai_menu.add_command(label="Neural Style Transfer...", command=self.style_transfer_dialog)
 
         # ---- Canvas Area ----
         self.canvas = tk.Canvas(self.root, bg="lightgray")
@@ -749,6 +781,310 @@ class SmartImageEditor:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to apply blur:\n{e}")
         tk.Button(blur_win, text="Apply", command=apply_blur).pack(pady=10)
+            # ---- AI COLOR CORRECTION FUNCTIONS ----
+    
+    def ai_full_color_correction_dialog(self):
+        """Dialog untuk full AI color correction"""
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title("AI Color Correction")
+        dialog.geometry("400x450")
+        
+        tk.Label(dialog, text="🎨 AI-Powered Color Enhancement", 
+                font=("Arial", 12, "bold")).pack(pady=10)
+        
+        # CLAHE
+        tk.Label(dialog, text="CLAHE Clip Limit (1.0 - 5.0):").pack(pady=(10,0))
+        clip_scale = tk.Scale(dialog, from_=1.0, to=5.0, resolution=0.1, orient="horizontal")
+        clip_scale.set(3.0)
+        clip_scale.pack()
+        
+        tk.Label(dialog, text="Tile Grid Size (2 - 16):").pack(pady=(10,0))
+        tile_scale = tk.Scale(dialog, from_=2, to=16, orient="horizontal")
+        tile_scale.set(8)
+        tile_scale.pack()
+        
+        # Gamma
+        tk.Label(dialog, text="Gamma (0.5 - 3.0):").pack(pady=(10,0))
+        tk.Label(dialog, text="< 1.0 = Brighter | > 1.0 = Darker", 
+                font=("Arial", 8)).pack()
+        gamma_scale = tk.Scale(dialog, from_=0.5, to=3.0, resolution=0.1, orient="horizontal")
+        gamma_scale.set(1.0)
+        gamma_scale.pack()
+        
+        # Brightness
+        tk.Label(dialog, text="Brightness (-50 to 50):").pack(pady=(10,0))
+        brightness_scale = tk.Scale(dialog, from_=-50, to=50, orient="horizontal")
+        brightness_scale.set(0)
+        brightness_scale.pack()
+        
+        # Contrast
+        tk.Label(dialog, text="Contrast (-50 to 50):").pack(pady=(10,0))
+        contrast_scale = tk.Scale(dialog, from_=-50, to=50, orient="horizontal")
+        contrast_scale.set(0)
+        contrast_scale.pack()
+        
+        # White Balance
+        wb_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(dialog, text="Auto White Balance", variable=wb_var).pack(pady=5)
+        
+        def apply_correction():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                corrected = ai_color_correction(
+                    cv_img,
+                    clip_limit=clip_scale.get(),
+                    tile_size=int(tile_scale.get()),
+                    gamma=gamma_scale.get(),
+                    brightness=int(brightness_scale.get()),
+                    contrast=int(contrast_scale.get()),
+                    wb_toggle=wb_var.get()
+                )
+                self.image = self.cv_to_pil(corrected)
+                self.display_image()
+                self.status.config(text="✅ AI Color Correction applied")
+                dialog.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to apply AI correction:\n{e}")
+        
+        tk.Button(dialog, text="✨ Apply AI Correction", 
+                 command=apply_correction, bg="#4CAF50", fg="white", 
+                 font=("Arial", 10, "bold")).pack(pady=20)
+    
+    def apply_clahe_quick(self):
+        """Quick CLAHE enhancement"""
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            enhanced = AIColorCorrection.apply_clahe(cv_img, clip_limit=3.0, tile_size=8)
+            self.image = self.cv_to_pil(enhanced)
+            self.display_image()
+            self.status.config(text="✅ CLAHE enhancement applied")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply CLAHE:\n{e}")
+    
+    def apply_white_balance(self):
+        """Quick auto white balance"""
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            balanced = AIColorCorrection.white_balance(cv_img)
+            self.image = self.cv_to_pil(balanced)
+            self.display_image()
+            self.status.config(text="✅ White balance applied")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply white balance:\n{e}")
+    
+    # ---- BACKGROUND REMOVAL FUNCTIONS ----
+    
+    def remove_bg_dialog(self, mode):
+        """Remove background dengan mode tertentu"""
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        if not BackgroundRemoval.is_available():
+            messagebox.showerror("Not Available", 
+                               "Background removal requires 'rembg' package.\n\n"
+                               "Install with: pip install rembg")
+            return
+        
+        # Confirm dialog karena proses agak lama
+        if not messagebox.askyesno("Remove Background", 
+                                   f"Remove background using {mode}?\n\n"
+                                   "⏳ This may take 10-30 seconds..."):
+            return
+        
+        try:
+            self.status.config(text=f"⏳ Removing background ({mode})...")
+            self.root.update()
+            
+            cv_img = self.pil_to_cv(self.image)
+            result = remove_bg(cv_img, mode=mode)
+            self.image = self.cv_to_pil(result)
+            self.display_image()
+            self.status.config(text=f"✅ Background removed ({mode})")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to remove background:\n{e}")
+            self.status.config(text="❌ Background removal failed")
+    
+    def remove_bg_custom_dialog(self):
+        """Custom background removal dengan settings lengkap"""
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        if not BackgroundRemoval.is_available():
+            messagebox.showerror("Not Available", 
+                               "Background removal requires 'rembg' package.\n\n"
+                               "Install with: pip install rembg")
+            return
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Custom Background Removal")
+        dialog.geometry("400x350")
+        
+        tk.Label(dialog, text="🔲 Custom Background Removal", 
+                font=("Arial", 12, "bold")).pack(pady=10)
+        
+        # Mode selection
+        tk.Label(dialog, text="Select Mode:").pack(pady=(10,0))
+        mode_var = tk.StringVar(value="General Mode")
+        modes = ["Portrait Mode", "General Mode", "Product Mode", "Anime Mode"]
+        for mode in modes:
+            tk.Radiobutton(dialog, text=mode, variable=mode_var, value=mode).pack(anchor="w", padx=50)
+        
+        # Color picker (optional)
+        tk.Label(dialog, text="\nRemove Specific Color (Optional):").pack()
+        color_var = tk.StringVar(value="")
+        
+        def pick_color():
+            color = colorchooser.askcolor(title="Choose color to remove")
+            if color[1]:
+                color_var.set(color[1])
+                color_display.config(bg=color[1])
+        
+        color_frame = tk.Frame(dialog)
+        color_frame.pack(pady=5)
+        tk.Button(color_frame, text="Pick Color", command=pick_color).pack(side="left", padx=5)
+        color_display = tk.Label(color_frame, text="  No Color  ", bg="lightgray", width=10)
+        color_display.pack(side="left")
+        
+        # Sensitivity
+        tk.Label(dialog, text="Color Sensitivity (10-100):").pack(pady=(10,0))
+        strength_scale = tk.Scale(dialog, from_=10, to=100, orient="horizontal")
+        strength_scale.set(30)
+        strength_scale.pack()
+        
+        def apply_removal():
+            try:
+                self.status.config(text="⏳ Removing background...")
+                dialog.destroy()
+                self.root.update()
+                
+                cv_img = self.pil_to_cv(self.image)
+                color = color_var.get() if color_var.get() else None
+                result = remove_bg(
+                    cv_img, 
+                    mode=mode_var.get(),
+                    color_to_remove=color,
+                    strength=strength_scale.get()
+                )
+                self.image = self.cv_to_pil(result)
+                self.display_image()
+                self.status.config(text="✅ Background removed successfully")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to remove background:\n{e}")
+                self.status.config(text="❌ Background removal failed")
+        
+        tk.Button(dialog, text="🗑️ Remove Background", 
+                 command=apply_removal, bg="#f44336", fg="white",
+                 font=("Arial", 10, "bold")).pack(pady=20)
+    
+    # ---- STYLE TRANSFER FUNCTION ----
+    
+    def style_transfer_dialog(self):
+        """Neural style transfer dialog"""
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        
+        if not StyleTransfer.is_available():
+            messagebox.showerror("Not Available", 
+                               "Style transfer requires PyTorch.\n\n"
+                               "Install with: pip install torch torchvision")
+            return
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Neural Style Transfer")
+        dialog.geometry("450x400")
+        
+        tk.Label(dialog, text="🎨 Neural Style Transfer", 
+                font=("Arial", 12, "bold")).pack(pady=10)
+        
+        tk.Label(dialog, text="⚠️ Warning: This process is SLOW! (30-60 seconds)",
+                fg="red", font=("Arial", 9)).pack()
+        
+        # Style image selection
+        style_path_var = tk.StringVar(value="No style image selected")
+        style_img_var = [None]  # Use list to store PIL image
+        
+        def select_style_image():
+            path = filedialog.askopenfilename(
+                title="Select Style Image",
+                filetypes=[("Image Files", "*.jpg *.jpeg *.png *.bmp")]
+            )
+            if path:
+                try:
+                    style_img_var[0] = Image.open(path)
+                    style_path_var.set(f"Selected: {path.split('/')[-1]}")
+                except:
+                    messagebox.showerror("Error", "Failed to load style image!")
+        
+        tk.Button(dialog, text="📁 Select Style Image", 
+                 command=select_style_image).pack(pady=10)
+        tk.Label(dialog, textvariable=style_path_var, 
+                font=("Arial", 8)).pack()
+        
+        # Intensity slider
+        tk.Label(dialog, text="\nStyle Intensity (0.0 - 1.0):").pack()
+        tk.Label(dialog, text="Lower = Keep original | Higher = More stylized",
+                font=("Arial", 8)).pack()
+        intensity_scale = tk.Scale(dialog, from_=0.0, to=1.0, 
+                                  resolution=0.05, orient="horizontal")
+        intensity_scale.set(0.5)
+        intensity_scale.pack()
+        
+        # Steps (optional advanced)
+        tk.Label(dialog, text="\nOptimization Steps (50-200):").pack(pady=(10,0))
+        tk.Label(dialog, text="More steps = Better quality but slower",
+                font=("Arial", 8)).pack()
+        steps_scale = tk.Scale(dialog, from_=50, to=200, orient="horizontal")
+        steps_scale.set(100)
+        steps_scale.pack()
+        
+        def apply_transfer():
+            if style_img_var[0] is None:
+                messagebox.showwarning("No Style", "Please select a style image first!")
+                return
+            
+            if not messagebox.askyesno("Confirm", 
+                                      "⏳ Style transfer will take 30-60 seconds.\n\n"
+                                      "Continue?"):
+                return
+            
+            try:
+                dialog.destroy()
+                self.status.config(text="⏳ Applying neural style transfer...")
+                self.root.update()
+                
+                cv_img = self.pil_to_cv(self.image)
+                cv_style = self.pil_to_cv(style_img_var[0])
+                
+                result = apply_style(
+                    cv_img, 
+                    cv_style, 
+                    intensity=intensity_scale.get()
+                )
+                
+                self.image = self.cv_to_pil(result)
+                self.display_image()
+                self.status.config(text="✅ Style transfer complete!")
+            except Exception as e:
+                messagebox.showerror("Error", f"Style transfer failed:\n{e}")
+                self.status.config(text="❌ Style transfer failed")
+        
+        tk.Button(dialog, text="🖼️ Apply Style Transfer", 
+                 command=apply_transfer, bg="#9C27B0", fg="white",
+                 font=("Arial", 10, "bold")).pack(pady=20)
+
 
 
 if __name__ == "__main__":
