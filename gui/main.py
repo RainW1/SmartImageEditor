@@ -4,7 +4,14 @@ from PIL import Image, ImageTk
 import pyscreenshot as ImageGrab
 import cv2
 import numpy as np
+import sys
+import os
+
+# Add parent directory to path untuk import features
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from filters import LinearFilters, NonLinearFilters, EdgeDetection, GeometricTransforms
+from features.color_enhancement import *
 
 
 class SmartImageEditor:
@@ -78,11 +85,28 @@ class SmartImageEditor:
         transform_menu.add_command(label="Flip Horizontal", command=lambda: self.flip_image(1))
         transform_menu.add_command(label="Flip Vertical", command=lambda: self.flip_image(0))
 
+        # Color Enhancement Menu
+        color_menu = tk.Menu(self.menu, tearoff=0)
+        self.menu.add_cascade(label="Color", menu=color_menu)
+        color_menu.add_command(label="Brightness & Contrast...", command=self.adjust_brightness_contrast_dialog)
+        color_menu.add_command(label="Saturation & Hue...", command=self.adjust_saturation_hue_dialog)
+        color_menu.add_command(label="Gamma Correction...", command=self.adjust_gamma_dialog)
+        color_menu.add_separator()
+        color_menu.add_command(label="Histogram Equalization", command=self.apply_histogram_eq)
+        color_menu.add_separator()
+        threshold_menu = tk.Menu(color_menu, tearoff=0)
+        color_menu.add_cascade(label="Thresholding", menu=threshold_menu)
+        threshold_menu.add_command(label="Global Threshold...", command=self.apply_global_threshold_dialog)
+        threshold_menu.add_command(label="Adaptive Threshold", command=self.apply_adaptive_threshold_fn)
+        blur_menu = tk.Menu(color_menu, tearoff=0)
+        color_menu.add_cascade(label="Blur Effects", menu=blur_menu)
+        blur_menu.add_command(label="Average Blur...", command=self.apply_average_blur_dialog)
+        blur_menu.add_command(label="Gaussian Blur...", command=self.apply_gaussian_blur_dialog)
+        blur_menu.add_command(label="Median Blur...", command=self.apply_median_blur_dialog)
+
         # ---- Canvas Area ----
         self.canvas = tk.Canvas(self.root, bg="lightgray")
         self.canvas.pack(fill="both", expand=True)
-        
-        # Bind mouse events for drawing
         self.canvas.bind("<ButtonPress-1>", self.start_draw)
         self.canvas.bind("<B1-Motion>", self.paint)
         self.canvas.bind("<ButtonRelease-1>", self.stop_draw)
@@ -109,9 +133,7 @@ class SmartImageEditor:
         control_panel = tk.Frame(self.root, bg="#f5f5f5", width=120)
         control_panel.pack(side="left", fill="y")
         tk.Label(control_panel, text="Brush Size:").pack(pady=(10,0))
-        self.brush_size_slider = tk.Scale(control_panel, from_=1, to=20, 
-                                         orient="horizontal",
-                                         command=self.update_brush_size)
+        self.brush_size_slider = tk.Scale(control_panel, from_=1, to=20, orient="horizontal", command=self.update_brush_size)
         self.brush_size_slider.set(self.pen_size)
         self.brush_size_slider.pack(pady=(0,10))
         tk.Label(control_panel, text="Brush Color:").pack()
@@ -130,22 +152,16 @@ class SmartImageEditor:
         self.edge_detection = EdgeDetection()
         self.geometric_transforms = GeometricTransforms()
 
-    # ========== IMAGE FORMAT CONVERSION ==========
     def pil_to_cv(self, pil_image):
-        """Convert PIL Image to OpenCV format (RGB to BGR)"""
         return cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
 
     def cv_to_pil(self, cv_image):
-        """Convert OpenCV image to PIL format (BGR to RGB)"""
         return Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
 
-    # ========== BRUSH SIZE UPDATE ==========
     def update_brush_size(self, value):
-        """Update brush size from slider in real-time"""
         self.pen_size = int(float(value))
         self.status.config(text=f"Brush Size: {self.pen_size}")
 
-    # ========== UNDO/REDO ==========
     def undo_action(self):
         if self.undo_stack:
             item = self.undo_stack.pop()
@@ -159,32 +175,19 @@ class SmartImageEditor:
         if self.redo_stack:
             item = self.redo_stack.pop()
             if item.get('type') == 'emoji':
-                obj = self.canvas.create_text(item['x'], item['y'], 
-                                             text=item['emoji'], 
-                                             font=("Arial", item['size']))
+                obj = self.canvas.create_text(item['x'], item['y'], text=item['emoji'], font=("Arial", item['size']))
                 item['id'] = obj
                 self.undo_stack.append(item)
             elif item.get('type') == 'line':
-                obj = self.canvas.create_line(item['coords'], 
-                                             fill=item['color'], 
-                                             width=item['width'], 
-                                             capstyle="round",
-                                             smooth=True)
+                obj = self.canvas.create_line(item['coords'], fill=item['color'], width=item['width'], capstyle="round", smooth=True)
                 item['id'] = obj
                 self.undo_stack.append(item)
             self.status.config(text="Redo successful")
         else:
             self.status.config(text="Nothing to redo")
 
-    # ========== EMOJI ==========
     def add_emoji_mode(self):
-        emojis = [
-            "😀", "😂", "😍", "😎", "🥳", "😜", "🤩", "😭", "😡", "👍", 
-            "👀", "🎉", "💖", "🔥", "🤖", "😇", "😏", "😱", "😴", "😈", 
-            "👻", "💩", "🙈", "🙉", "🙊", "🐶", "🐱", "🦄", "🍕", "🍔", 
-            "🍟", "🍦", "🍩", "🍉", "🍓", "🍒", "🍇", "🍌", "🍍", "🥑", 
-            "🥦", "🥕", "🌈", "⭐", "⚡", "☀️", "🌙"
-        ]
+        emojis = ["😀","😂","😍","😎","🥳","😜","🤩","😭","😡","👍","👀","🎉","💖","🔥","🤖","😇","😏","😱","😴","😈","👻","💩","🙈","🙉","🙊","🐶","🐱","🦄","🍕","🍔","🍟","🍦","🍩","🍉","🍓","🍒","🍇","🍌","🍍","🥑","🥦","🥕","🌈","⭐","⚡","☀️","🌙"]
         self.selected_emoji = None
         self.emoji_size = 32
         
@@ -196,13 +199,11 @@ class SmartImageEditor:
         emoji_win = tk.Toplevel(self.root)
         emoji_win.title("Choose an Emoji")
         emoji_win.geometry("400x300")
-
         size_label = tk.Label(emoji_win, text="Emoji Size:")
         size_label.pack(pady=(10,0))
         size_scale = tk.Scale(emoji_win, from_=16, to=128, orient="horizontal")
         size_scale.set(self.emoji_size)
         size_scale.pack(pady=(0,10))
-
         canvas = tk.Canvas(emoji_win, width=350, height=200)
         frame = tk.Frame(canvas)
         vsb = tk.Scrollbar(emoji_win, orient="vertical", command=canvas.yview)
@@ -212,16 +213,12 @@ class SmartImageEditor:
         vsb.pack(side="right", fill="y")
         hsb.pack(side="bottom", fill="x")
         canvas.create_window((0,0), window=frame, anchor="nw")
-
         for i, emoji in enumerate(emojis):
-            btn = tk.Button(frame, text=emoji, font=("Arial", 24), 
-                          command=lambda e=emoji: select_emoji(e))
+            btn = tk.Button(frame, text=emoji, font=("Arial", 24), command=lambda e=emoji: select_emoji(e))
             btn.grid(row=i//8, column=i%8, padx=5, pady=5)
-
         def on_frame_configure(event):
             canvas.configure(scrollregion=canvas.bbox("all"))
         frame.bind("<Configure>", on_frame_configure)
-
         emoji_win.grab_set()
         self.root.wait_window(emoji_win)
         if self.selected_emoji:
@@ -229,28 +226,16 @@ class SmartImageEditor:
 
     def place_emoji(self, event):
         x, y = event.x, event.y
-        obj = self.canvas.create_text(x, y, text=self.selected_emoji, 
-                                     font=("Arial", self.emoji_size))
-        self.undo_stack.append({
-            'type': 'emoji', 
-            'x': x, 
-            'y': y, 
-            'emoji': self.selected_emoji, 
-            'size': self.emoji_size, 
-            'id': obj
-        })
+        obj = self.canvas.create_text(x, y, text=self.selected_emoji, font=("Arial", self.emoji_size))
+        self.undo_stack.append({'type':'emoji','x':x,'y':y,'emoji':self.selected_emoji,'size':self.emoji_size,'id':obj})
         self.redo_stack.clear()
         self.canvas.unbind("<Button-1>")
-        # Re-bind drawing events
         self.canvas.bind("<ButtonPress-1>", self.start_draw)
         self.canvas.bind("<B1-Motion>", self.paint)
         self.canvas.bind("<ButtonRelease-1>", self.stop_draw)
 
-    # ========== FILE OPERATIONS ==========
     def open_image(self):
-        path = filedialog.askopenfilename(
-            filetypes=[("Image Files", "*.jpg *.png *.jpeg *.bmp *.gif")]
-        )
+        path = filedialog.askopenfilename(filetypes=[("Image Files","*.jpg *.png *.jpeg *.bmp *.gif")])
         if path:
             self.file_path = path
             self.image = Image.open(path)
@@ -260,106 +245,67 @@ class SmartImageEditor:
 
     def display_image(self):
         if self.image:
-            # Clear canvas first
             self.canvas.delete("all")
-            
-            # Get canvas size
             self.root.update()
             canvas_width = self.canvas.winfo_width()
             canvas_height = self.canvas.winfo_height()
-            
-            # Get image size
             img_width, img_height = self.image.size
-            
-            # Calculate scale to fit canvas
             padding = 50
-            scale = min((canvas_width-padding)/img_width, 
-                       (canvas_height-padding)/img_height, 1.0)
+            scale = min((canvas_width-padding)/img_width, (canvas_height-padding)/img_height, 1.0)
             new_width = int(img_width * scale)
             new_height = int(img_height * scale)
-            
-            # Ask user for custom size (optional)
-            use_auto = messagebox.askyesno(
-                "Resize Image", 
-                f"Auto-resize to {new_width}x{new_height} to fit canvas?\n\n" +
-                "Click 'No' for custom size."
-            )
-            
+            use_auto = messagebox.askyesno("Resize Image", f"Auto-resize to {new_width}x{new_height} to fit canvas?\n\nClick 'No' for custom size.")
             if not use_auto:
-                # Show resize dialog
                 resize_win = tk.Toplevel(self.root)
                 resize_win.title("Resize Image")
                 resize_win.geometry("300x200")
-                
                 tk.Label(resize_win, text="Width:").pack()
-                width_scale = tk.Scale(resize_win, from_=int(img_width/4), 
-                                      to=int(img_width*2), orient="horizontal")
+                width_scale = tk.Scale(resize_win, from_=int(img_width/4), to=int(img_width*2), orient="horizontal")
                 width_scale.set(new_width)
                 width_scale.pack()
-                
                 tk.Label(resize_win, text="Height:").pack()
-                height_scale = tk.Scale(resize_win, from_=int(img_height/4), 
-                                       to=int(img_height*2), orient="horizontal")
+                height_scale = tk.Scale(resize_win, from_=int(img_height/4), to=int(img_height*2), orient="horizontal")
                 height_scale.set(new_height)
                 height_scale.pack()
-                
                 def apply_resize():
                     nonlocal new_width, new_height
                     new_width = width_scale.get()
                     new_height = height_scale.get()
                     resize_win.destroy()
-                
                 tk.Button(resize_win, text="Apply", command=apply_resize).pack(pady=10)
                 resize_win.grab_set()
                 self.root.wait_window(resize_win)
-            
-            # Resize image
             self.image = self.image.resize((new_width, new_height), Image.LANCZOS)
-            
-            # Center image on canvas
             self.tk_image = ImageTk.PhotoImage(self.image)
             x = (canvas_width - new_width) // 2
             y = (canvas_height - new_height) // 2
             self.canvas.create_image(x, y, anchor="nw", image=self.tk_image, tags="image")
-            
             self.status.config(text=f"Image loaded: {new_width}x{new_height}")
             
     def reset_to_original(self):
-        """Reset image to original (undo all filters)"""
         if hasattr(self, 'original_image') and self.original_image:
             self.image = self.original_image.copy()
             self.display_image()
             self.status.config(text="Reset to original image")
         else:
-            messagebox.showinfo("No Original", "No original image to reset to!")     
+            messagebox.showinfo("No Original", "No original image to reset to!")
 
     def save_image(self):
-        path = filedialog.asksaveasfilename(
-            defaultextension=".png",
-            filetypes=[("PNG files", "*.png"), ("JPEG files", "*.jpg")]
-        )
-        
+        path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files","*.png"),("JPEG files","*.jpg")])
         if path:
             try:
-                # Update canvas
                 self.root.update()
-                
-                # Get canvas coordinates
                 x = self.canvas.winfo_rootx()
                 y = self.canvas.winfo_rooty()
                 w = self.canvas.winfo_width()
                 h = self.canvas.winfo_height()
-                
-                # Capture using pyscreenshot
-                img = ImageGrab.grab(bbox=(x, y, x + w, y + h))
+                img = ImageGrab.grab(bbox=(x, y, x+w, y+h))
                 img.save(path)
-                
                 self.status.config(text=f"Saved: {path}")
                 messagebox.showinfo("Success", f"Image saved to:\n{path}")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save image:\n{e}")
 
-    # ========== DRAWING ==========
     def choose_color(self):
         color = colorchooser.askcolor(title="Choose drawing color")
         if color[1]:
@@ -378,23 +324,8 @@ class SmartImageEditor:
         if self.drawing:
             x, y = event.x, event.y
             self.pen_size = self.brush_size_slider.get()
-            
-            obj = self.canvas.create_line(
-                self.last_x, self.last_y, x, y,
-                fill=self.pen_color, 
-                width=self.pen_size, 
-                capstyle="round",
-                smooth=True
-            )
-            
-            self.undo_stack.append({
-                'type': 'line', 
-                'coords': (self.last_x, self.last_y, x, y), 
-                'color': self.pen_color, 
-                'width': self.pen_size, 
-                'id': obj
-            })
-            
+            obj = self.canvas.create_line(self.last_x, self.last_y, x, y, fill=self.pen_color, width=self.pen_size, capstyle="round", smooth=True)
+            self.undo_stack.append({'type':'line','coords':(self.last_x,self.last_y,x,y),'color':self.pen_color,'width':self.pen_size,'id':obj})
             self.last_x, self.last_y = x, y
             self.redo_stack.clear()
 
@@ -403,19 +334,16 @@ class SmartImageEditor:
         self.last_x, self.last_y = None, None
 
     def clear_canvas(self):
-        if messagebox.askyesno("Clear Canvas", 
-                              "Are you sure? This cannot be undone!"):
+        if messagebox.askyesno("Clear Canvas", "Are you sure? This cannot be undone!"):
             self.canvas.delete("all")
             self.undo_stack.clear()
             self.redo_stack.clear()
             self.status.config(text="Canvas cleared")
 
-    # ========== FILTER METHODS ==========
     def apply_mean_filter(self):
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         try:
             cv_img = self.pil_to_cv(self.image)
             filtered = self.linear_filters.mean_filter(cv_img, kernel_size=5)
@@ -429,7 +357,6 @@ class SmartImageEditor:
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         try:
             cv_img = self.pil_to_cv(self.image)
             filtered = self.linear_filters.gaussian_filter(cv_img, kernel_size=5, sigma=1.5)
@@ -443,7 +370,6 @@ class SmartImageEditor:
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         try:
             cv_img = self.pil_to_cv(self.image)
             filtered = self.linear_filters.sharpen_filter(cv_img)
@@ -457,7 +383,6 @@ class SmartImageEditor:
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         try:
             cv_img = self.pil_to_cv(self.image)
             filtered = self.nonlinear_filters.median_filter(cv_img, kernel_size=5)
@@ -471,7 +396,6 @@ class SmartImageEditor:
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         try:
             cv_img = self.pil_to_cv(self.image)
             filtered = self.edge_detection.sobel_edge(cv_img)
@@ -485,7 +409,6 @@ class SmartImageEditor:
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         try:
             cv_img = self.pil_to_cv(self.image)
             filtered = self.edge_detection.prewitt_edge(cv_img)
@@ -499,7 +422,6 @@ class SmartImageEditor:
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         try:
             cv_img = self.pil_to_cv(self.image)
             filtered = self.edge_detection.laplacian_edge(cv_img)
@@ -509,97 +431,74 @@ class SmartImageEditor:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to apply filter:\n{e}")
 
-    # ========== GEOMETRIC TRANSFORMS ==========
     def crop_image_dialog(self):
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         crop_win = tk.Toplevel(self.root)
         crop_win.title("Crop Image")
         crop_win.geometry("300x250")
-        
         h, w = self.pil_to_cv(self.image).shape[:2]
-        
         tk.Label(crop_win, text=f"Image Size: {w} x {h}").pack(pady=5)
-        
         tk.Label(crop_win, text="X (Left):").pack()
         x_scale = tk.Scale(crop_win, from_=0, to=w-1, orient="horizontal")
         x_scale.pack()
-        
         tk.Label(crop_win, text="Y (Top):").pack()
         y_scale = tk.Scale(crop_win, from_=0, to=h-1, orient="horizontal")
         y_scale.pack()
-        
         tk.Label(crop_win, text="Width:").pack()
         w_scale = tk.Scale(crop_win, from_=1, to=w, orient="horizontal")
         w_scale.set(w//2)
         w_scale.pack()
-        
         tk.Label(crop_win, text="Height:").pack()
         h_scale = tk.Scale(crop_win, from_=1, to=h, orient="horizontal")
         h_scale.set(h//2)
         h_scale.pack()
-        
         def apply_crop():
             try:
                 cv_img = self.pil_to_cv(self.image)
-                cropped = self.geometric_transforms.crop_image(
-                    cv_img, x_scale.get(), y_scale.get(), 
-                    w_scale.get(), h_scale.get()
-                )
+                cropped = self.geometric_transforms.crop_image(cv_img, x_scale.get(), y_scale.get(), w_scale.get(), h_scale.get())
                 self.image = self.cv_to_pil(cropped)
                 self.display_image()
                 self.status.config(text="Image cropped")
                 crop_win.destroy()
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to crop:\n{e}")
-        
         tk.Button(crop_win, text="Apply Crop", command=apply_crop).pack(pady=10)
     
     def resize_image_dialog(self):
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         resize_win = tk.Toplevel(self.root)
         resize_win.title("Resize Image")
         resize_win.geometry("300x200")
-        
         w, h = self.image.size
-        
         tk.Label(resize_win, text=f"Current Size: {w} x {h}").pack(pady=5)
-        
         tk.Label(resize_win, text="New Width:").pack()
         width_scale = tk.Scale(resize_win, from_=50, to=w*2, orient="horizontal")
         width_scale.set(w)
         width_scale.pack()
-        
         tk.Label(resize_win, text="New Height:").pack()
         height_scale = tk.Scale(resize_win, from_=50, to=h*2, orient="horizontal")
         height_scale.set(h)
         height_scale.pack()
-        
         def apply_resize():
             try:
                 cv_img = self.pil_to_cv(self.image)
-                resized = self.geometric_transforms.resize_image(
-                    cv_img, width=width_scale.get(), height=height_scale.get()
-                )
+                resized = self.geometric_transforms.resize_image(cv_img, width=width_scale.get(), height=height_scale.get())
                 self.image = self.cv_to_pil(resized)
                 self.display_image()
                 self.status.config(text=f"Resized to {width_scale.get()}x{height_scale.get()}")
                 resize_win.destroy()
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to resize:\n{e}")
-        
         tk.Button(resize_win, text="Apply Resize", command=apply_resize).pack(pady=10)
     
     def rotate_90_degrees(self, k):
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         try:
             cv_img = self.pil_to_cv(self.image)
             rotated = self.geometric_transforms.rotate_90(cv_img, k)
@@ -614,46 +513,35 @@ class SmartImageEditor:
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         rotate_win = tk.Toplevel(self.root)
         rotate_win.title("Custom Rotation")
         rotate_win.geometry("300x200")
-        
         tk.Label(rotate_win, text="Rotation Angle (degrees):").pack(pady=5)
         angle_scale = tk.Scale(rotate_win, from_=-180, to=180, orient="horizontal")
         angle_scale.set(0)
         angle_scale.pack()
-        
         tk.Label(rotate_win, text="Scale:").pack()
         scale_scale = tk.Scale(rotate_win, from_=0.1, to=2.0, resolution=0.1, orient="horizontal")
         scale_scale.set(1.0)
         scale_scale.pack()
-        
         keep_size_var = tk.BooleanVar(value=True)
         tk.Checkbutton(rotate_win, text="Keep original size", variable=keep_size_var).pack()
-        
         def apply_rotation():
             try:
                 cv_img = self.pil_to_cv(self.image)
-                rotated = self.geometric_transforms.rotate_image(
-                    cv_img, angle_scale.get(), 
-                    scale=scale_scale.get(),
-                    keep_size=keep_size_var.get()
-                )
+                rotated = self.geometric_transforms.rotate_image(cv_img, angle_scale.get(), scale=scale_scale.get(), keep_size=keep_size_var.get())
                 self.image = self.cv_to_pil(rotated)
                 self.display_image()
                 self.status.config(text=f"Rotated {angle_scale.get()}°")
                 rotate_win.destroy()
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to rotate:\n{e}")
-        
         tk.Button(rotate_win, text="Apply Rotation", command=apply_rotation).pack(pady=10)
     
     def flip_image(self, flip_code):
         if self.image is None:
             messagebox.showwarning("No Image", "Please open an image first!")
             return
-        
         try:
             cv_img = self.pil_to_cv(self.image)
             flipped = self.geometric_transforms.flip_image(cv_img, flip_code)
@@ -664,10 +552,206 @@ class SmartImageEditor:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to flip:\n{e}")
 
+    def adjust_brightness_contrast_dialog(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        adjust_win = tk.Toplevel(self.root)
+        adjust_win.title("Brightness & Contrast")
+        adjust_win.geometry("350x200")
+        tk.Label(adjust_win, text="Brightness (-127 to 127):").pack(pady=5)
+        brightness_scale = tk.Scale(adjust_win, from_=-127, to=127, orient="horizontal")
+        brightness_scale.set(0)
+        brightness_scale.pack()
+        tk.Label(adjust_win, text="Contrast (-127 to 127):").pack(pady=5)
+        contrast_scale = tk.Scale(adjust_win, from_=-127, to=127, orient="horizontal")
+        contrast_scale.set(0)
+        contrast_scale.pack()
+        def apply_adjustment():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                adjusted = adjust_brightness_contrast(cv_img, brightness=brightness_scale.get(), contrast=contrast_scale.get())
+                self.image = self.cv_to_pil(adjusted)
+                self.display_image()
+                self.status.config(text=f"Brightness: {brightness_scale.get()}, Contrast: {contrast_scale.get()}")
+                adjust_win.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to adjust:\n{e}")
+        tk.Button(adjust_win, text="Apply", command=apply_adjustment).pack(pady=10)
+    
+    def adjust_saturation_hue_dialog(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        adjust_win = tk.Toplevel(self.root)
+        adjust_win.title("Saturation & Hue")
+        adjust_win.geometry("350x200")
+        tk.Label(adjust_win, text="Saturation (-255 to 255):").pack(pady=5)
+        saturation_scale = tk.Scale(adjust_win, from_=-255, to=255, orient="horizontal")
+        saturation_scale.set(0)
+        saturation_scale.pack()
+        tk.Label(adjust_win, text="Hue (-179 to 179):").pack(pady=5)
+        hue_scale = tk.Scale(adjust_win, from_=-179, to=179, orient="horizontal")
+        hue_scale.set(0)
+        hue_scale.pack()
+        def apply_adjustment():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                adjusted = adjust_saturation_hue(cv_img, saturation=saturation_scale.get(), hue=hue_scale.get())
+                self.image = self.cv_to_pil(adjusted)
+                self.display_image()
+                self.status.config(text=f"Saturation: {saturation_scale.get()}, Hue: {hue_scale.get()}")
+                adjust_win.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to adjust:\n{e}")
+        tk.Button(adjust_win, text="Apply", command=apply_adjustment).pack(pady=10)
+    
+    def adjust_gamma_dialog(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        gamma_win = tk.Toplevel(self.root)
+        gamma_win.title("Gamma Correction")
+        gamma_win.geometry("350x150")
+        tk.Label(gamma_win, text="Gamma (0.1 to 3.0):").pack(pady=5)
+        tk.Label(gamma_win, text="< 1.0 = Brighter | > 1.0 = Darker", font=("Arial", 9)).pack()
+        gamma_scale = tk.Scale(gamma_win, from_=0.1, to=3.0, resolution=0.1, orient="horizontal")
+        gamma_scale.set(1.0)
+        gamma_scale.pack()
+        def apply_gamma_correction():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                adjusted = adjust_gamma(cv_img, gamma=gamma_scale.get())
+                self.image = self.cv_to_pil(adjusted)
+                self.display_image()
+                self.status.config(text=f"Gamma correction applied: {gamma_scale.get()}")
+                gamma_win.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to apply gamma:\n{e}")
+        tk.Button(gamma_win, text="Apply", command=apply_gamma_correction).pack(pady=10)
+    
+    def apply_histogram_eq(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            equalized = apply_histogram_equalization(cv_img)
+            self.image = self.cv_to_pil(equalized)
+            self.display_image()
+            self.status.config(text="Histogram equalization applied")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply histogram equalization:\n{e}")
+    
+    def apply_global_threshold_dialog(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        threshold_win = tk.Toplevel(self.root)
+        threshold_win.title("Global Threshold")
+        threshold_win.geometry("350x150")
+        tk.Label(threshold_win, text="Threshold Value (0 to 255):").pack(pady=5)
+        threshold_scale = tk.Scale(threshold_win, from_=0, to=255, orient="horizontal")
+        threshold_scale.set(127)
+        threshold_scale.pack()
+        def apply_threshold():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                thresholded = apply_global_threshold(cv_img, threshold_value=threshold_scale.get())
+                thresholded_bgr = cv2.cvtColor(thresholded, cv2.COLOR_GRAY2BGR)
+                self.image = self.cv_to_pil(thresholded_bgr)
+                self.display_image()
+                self.status.config(text=f"Global threshold applied: {threshold_scale.get()}")
+                threshold_win.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to apply threshold:\n{e}")
+        tk.Button(threshold_win, text="Apply", command=apply_threshold).pack(pady=10)
+    
+    def apply_adaptive_threshold_fn(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        try:
+            cv_img = self.pil_to_cv(self.image)
+            thresholded = apply_adaptive_threshold(cv_img)
+            thresholded_bgr = cv2.cvtColor(thresholded, cv2.COLOR_GRAY2BGR)
+            self.image = self.cv_to_pil(thresholded_bgr)
+            self.display_image()
+            self.status.config(text="Adaptive threshold applied")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply adaptive threshold:\n{e}")
+    
+    def apply_average_blur_dialog(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        blur_win = tk.Toplevel(self.root)
+        blur_win.title("Average Blur")
+        blur_win.geometry("350x150")
+        tk.Label(blur_win, text="Kernel Size (odd numbers only):").pack(pady=5)
+        kernel_scale = tk.Scale(blur_win, from_=3, to=31, resolution=2, orient="horizontal")
+        kernel_scale.set(5)
+        kernel_scale.pack()
+        def apply_blur():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                blurred = apply_average_blur(cv_img, kernel_size=kernel_scale.get())
+                self.image = self.cv_to_pil(blurred)
+                self.display_image()
+                self.status.config(text=f"Average blur applied: kernel {kernel_scale.get()}")
+                blur_win.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to apply blur:\n{e}")
+        tk.Button(blur_win, text="Apply", command=apply_blur).pack(pady=10)
+    
+    def apply_gaussian_blur_dialog(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        blur_win = tk.Toplevel(self.root)
+        blur_win.title("Gaussian Blur")
+        blur_win.geometry("350x150")
+        tk.Label(blur_win, text="Kernel Size (odd numbers only):").pack(pady=5)
+        kernel_scale = tk.Scale(blur_win, from_=3, to=31, resolution=2, orient="horizontal")
+        kernel_scale.set(5)
+        kernel_scale.pack()
+        def apply_blur():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                blurred = apply_gaussian_blur(cv_img, kernel_size=kernel_scale.get())
+                self.image = self.cv_to_pil(blurred)
+                self.display_image()
+                self.status.config(text=f"Gaussian blur applied: kernel {kernel_scale.get()}")
+                blur_win.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to apply blur:\n{e}")
+        tk.Button(blur_win, text="Apply", command=apply_blur).pack(pady=10)
+    
+    def apply_median_blur_dialog(self):
+        if self.image is None:
+            messagebox.showwarning("No Image", "Please open an image first!")
+            return
+        blur_win = tk.Toplevel(self.root)
+        blur_win.title("Median Blur")
+        blur_win.geometry("350x150")
+        tk.Label(blur_win, text="Kernel Size (odd numbers only):").pack(pady=5)
+        kernel_scale = tk.Scale(blur_win, from_=3, to=31, resolution=2, orient="horizontal")
+        kernel_scale.set(5)
+        kernel_scale.pack()
+        def apply_blur():
+            try:
+                cv_img = self.pil_to_cv(self.image)
+                blurred = apply_median_blur(cv_img, kernel_size=kernel_scale.get())
+                self.image = self.cv_to_pil(blurred)
+                self.display_image()
+                self.status.config(text=f"Median blur applied: kernel {kernel_scale.get()}")
+                blur_win.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to apply blur:\n{e}")
+        tk.Button(blur_win, text="Apply", command=apply_blur).pack(pady=10)
 
-# ---- Run the App ----
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = SmartImageEditor(root)
-    root.mainloop() 
-                
+    root.mainloop()
