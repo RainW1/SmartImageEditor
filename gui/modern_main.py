@@ -99,9 +99,6 @@ class ModernImageEditor(ctk.CTk):
         self.drawing_start_pos = None
         self.drawing_temp_item = None
         self.text_to_draw = ""
-        
-        self.drawing_history = []
-        self.drawing_history_index = -1
 
         # ===== AI VARIABLES =====
         self.bg_mode_var = None  # Will be set when AI panel opens
@@ -1414,37 +1411,35 @@ class ModernImageEditor(ctk.CTk):
         tools = [
             ("✏️ Pen", "pen"),
             ("📏 Line", "line"),
-            ("⬜ Rect", "rectangle"),  # ← Shortened text
+            ("⬜ Rectangle", "rectangle"),
             ("⭕ Circle", "circle"),
             ("➡️ Arrow", "arrow"),
             ("📝 Text", "text"),
             ("🪣 Fill", "fill"),
         ]
-            
-        # Create 2 rows: 4 tools in row 1, 3 in row 2
+        
+        # Create 2 rows of tools
         row1_frame = ctk.CTkFrame(tools_frame, fg_color="transparent")
-        row1_frame.pack(fill="x", pady=5, padx=5)
-
+        row1_frame.pack(fill="x", pady=5)
+        
         row2_frame = ctk.CTkFrame(tools_frame, fg_color="transparent")
-        row2_frame.pack(fill="x", pady=5, padx=5)
-
+        row2_frame.pack(fill="x", pady=5)
+        
         self.tool_buttons = {}
-
+        
         for i, (tool_name, tool_id) in enumerate(tools):
-            # First 4 go to row 1, rest to row 2
             parent = row1_frame if i < 4 else row2_frame
             
             btn = ctk.CTkButton(
                 parent,
                 text=tool_name,
-                height=40,  # ← Slightly taller
-                width=85,   # ← Slightly narrower to fit 4
+                height=35,
+                width=90,
                 command=lambda t=tool_id: self.select_drawing_tool(t),
                 fg_color="#ec4899" if tool_id == self.drawing_tool else "gray30",
-                hover_color="#db2777",
-                font=("Arial", 11)  # ← Smaller font
+                hover_color="#db2777"
             )
-            btn.pack(side="left", padx=2, pady=2)
+            btn.pack(side="left", padx=3, pady=3)
             self.tool_buttons[tool_id] = btn
         
         # ===== COLOR PICKER =====
@@ -1666,26 +1661,16 @@ class ModernImageEditor(ctk.CTk):
                 hover_color="#dc2626"
             )
             
-            # Replace shortcuts with drawing-specific undo/redo
             self.unbind("<Control-z>")
             self.unbind("<Control-y>")
             self.unbind("<Control-Shift-z>")
-            
-            self.bind("<Control-z>", lambda e: self.undo_drawing())
-            self.bind("<Control-y>", lambda e: self.redo_drawing())
-            self.bind("<Control-Shift-z>", lambda e: self.redo_drawing())
-            
-            # Initialize drawing history
-            self.drawing_history = []
-            self.drawing_history_index = -1
-            self.add_drawing_to_history()  # Save initial empty state
-            
-            # Bind mouse events
+                
+            # Bind mouse events based on tool
             self.canvas.bind("<ButtonPress-1>", self.on_drawing_start)
             self.canvas.bind("<B1-Motion>", self.on_drawing_drag)
             self.canvas.bind("<ButtonRelease-1>", self.on_drawing_end)
             
-            self.update_status(f"✏️ Drawing mode ON - Ctrl+Z/Y for drawing undo/redo")
+            self.update_status(f"✏️ Drawing mode ON - Using {self.drawing_tool} tool")
         else:
             # Disable drawing
             self.drawing_toggle_btn.configure(
@@ -1694,22 +1679,18 @@ class ModernImageEditor(ctk.CTk):
                 hover_color="darkgreen"
             )
             
-            # Restore normal undo/redo
-            self.unbind("<Control-z>")
-            self.unbind("<Control-y>")
-            self.unbind("<Control-Shift-z>")
-            
+          
             self.bind("<Control-z>", lambda e: self.undo_action())
             self.bind("<Control-y>", lambda e: self.redo_action())
             self.bind("<Control-Shift-z>", lambda e: self.redo_action())
             
-            # Unbind mouse events
+            # Unbind events
             self.canvas.unbind("<ButtonPress-1>")
             self.canvas.unbind("<B1-Motion>")
             self.canvas.unbind("<ButtonRelease-1>")
             
             self.update_status("✏️ Drawing mode OFF")
-            
+
     def on_drawing_start(self, event):
         """Start drawing"""
         self.drawing_start_pos = (event.x, event.y)
@@ -1803,8 +1784,6 @@ class ModernImageEditor(ctk.CTk):
         """End drawing"""
         self.drawing_temp_item = None
         self.drawing_start_pos = None
-        
-        self.add_drawing_to_history()
 
     def place_text(self, x, y):
         """Place text on canvas"""
@@ -1885,94 +1864,8 @@ class ModernImageEditor(ctk.CTk):
             messagebox.showinfo("Success", "Drawings applied to image!")
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to apply drawings:\n{e}")    
-            
-    def add_drawing_to_history(self):
-        """Save current canvas drawing state"""
-        # Get all items with 'drawing' tag
-        drawing_items = self.canvas.find_withtag("drawing")
+            messagebox.showerror("Error", f"Failed to apply drawings:\n{e}")        
         
-        # Save item data
-        items_data = []
-        for item in drawing_items:
-            item_type = self.canvas.type(item)
-            coords = self.canvas.coords(item)
-            config = {}
-            
-            # Save relevant config
-            if item_type == "line":
-                config = {
-                    'fill': self.canvas.itemcget(item, 'fill'),
-                    'width': self.canvas.itemcget(item, 'width'),
-                }
-            elif item_type in ["rectangle", "oval"]:
-                config = {
-                    'outline': self.canvas.itemcget(item, 'outline'),
-                    'fill': self.canvas.itemcget(item, 'fill'),
-                    'width': self.canvas.itemcget(item, 'width'),
-                }
-            elif item_type == "text":
-                config = {
-                    'fill': self.canvas.itemcget(item, 'fill'),
-                    'font': self.canvas.itemcget(item, 'font'),
-                    'text': self.canvas.itemcget(item, 'text'),
-                }
-            
-            items_data.append({
-                'type': item_type,
-                'coords': coords,
-                'config': config
-            })
-        
-        # Remove future history
-        if self.drawing_history_index < len(self.drawing_history) - 1:
-            self.drawing_history = self.drawing_history[:self.drawing_history_index + 1]
-        
-        # Add to history
-        self.drawing_history.append(items_data)
-        self.drawing_history_index += 1
-
-    def undo_drawing(self):
-        """Undo last drawing action"""
-        if self.drawing_history_index > 0:
-            self.drawing_history_index -= 1
-            self.restore_drawing_state()
-            self.update_status(f"↶ Drawing Undo | {self.drawing_history_index + 1}/{len(self.drawing_history)}")
-        else:
-            self.update_status("Nothing to undo in drawings")
-
-    def redo_drawing(self):
-        """Redo drawing action"""
-        if self.drawing_history_index < len(self.drawing_history) - 1:
-            self.drawing_history_index += 1
-            self.restore_drawing_state()
-            self.update_status(f"↷ Drawing Redo | {self.drawing_history_index + 1}/{len(self.drawing_history)}")
-        else:
-            self.update_status("Nothing to redo in drawings")
-
-    def restore_drawing_state(self):
-        """Restore canvas to saved drawing state"""
-        # Clear current drawings
-        self.canvas.delete("drawing")
-        
-        # Restore from history
-        if 0 <= self.drawing_history_index < len(self.drawing_history):
-            items_data = self.drawing_history[self.drawing_history_index]
-            
-            for item_data in items_data:
-                item_type = item_data['type']
-                coords = item_data['coords']
-                config = item_data['config']
-                
-                if item_type == "line":
-                    self.canvas.create_line(*coords, tags="drawing", **config)
-                elif item_type == "rectangle":
-                    self.canvas.create_rectangle(*coords, tags="drawing", **config)
-                elif item_type == "oval":
-                    self.canvas.create_oval(*coords, tags="drawing", **config)
-                elif item_type == "text":
-                    self.canvas.create_text(*coords, tags="drawing", **config)                
-            
     # ===== ROTATE METHODS =====
 
     def rotate_image(self, angle):
