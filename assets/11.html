@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6 Simple Games in HTML</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        body {
+            background-color: #f0f2f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .game-nav {
+            background-color: #2c3e50;
+            padding: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .game-nav button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .game-nav button:hover {
+            background-color: #2980b9;
+        }
+        
+        .game-nav button.active {
+            background-color: #2ecc71;
+        }
+        
+        .game-content {
+            padding: 30px;
+            display: none;
+        }
+        
+        .game-content.active {
+            display: block;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .game-info {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        .result {
+            margin: 15px 0;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        /* Tic Tac Toe styles */
+        .tic-tac-toe-board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 5px;
+            margin: 20px auto;
+            width: 310px;
+        }
+        
+        .tic-tac-toe-cell {
+            background-color: #ecf0f1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 48px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        
+        .tic-tac-toe-cell:hover {
+            background-color: #d1ecf1;
+        }
+        
+        .word-display {
+            font-size: 24px;
+            letter-spacing: 5px;
+            margin: 20px 0;
+        }
+        
+        /* Coin Flip styles */
+        .coin-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .coin {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background-color: #f39c12;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transition: transform 0.5s ease;
+        }
+        
+        .coin.flipping {
+            transform: rotateY(1800deg);
+        }
+        
+        @media (max-width: 600px) {
+            .tic-tac-toe-board {
+                grid-template-columns: repeat(3, 80px);
+                grid-template-rows: repeat(3, 80px);
+                width: 250px;
+            }
+            
+            .game-nav {
+                justify-content: center;
+            }
+            
+            .coin {
+                width: 120px;
+                height: 120px;
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="game-nav">
+            <button onclick="showGame('coin-flip')" class="active">Coin Flip</button>
+            <button onclick="showGame('rock-paper-scissors')">Rock Paper Scissors</button>
+            <button onclick="showGame('tic-tac-toe')">Tic Tac Toe</button>
+            <button onclick="showGame('guess-word')">Guess Word</button>
+            <button onclick="showGame('dice-roll')">Dice Roll</button>
+            <button onclick="showGame('number-bomb')">Number Bomb</button>
+        </div>
+        
+        <!-- 1. Coin Flip Game -->
+        <div id="coin-flip" class="game-content active">
+            <h1>Coin Flip</h1>
+            <div class="game-info">
+                Guess heads or tails! Predict the outcome of a coin flip.
+            </div>
+            
+            <div class="coin-container">
+                <div id="coin" class="coin">Choose</div>
+            </div>
+            
+            <div style="text-align: center;">
+                <button onclick="flipCoin('heads')">Heads</button>
+                <button onclick="flipCoin('tails')">Tails</button>
+                <button onclick="resetCoinFlip()">Reset</button>
+            </div>
+            
+            <div id="coin-result" class="result"></div>
+            <div id="coin-score">Score: You 0 - 0 Coin</div>
+        </div>
+        
+        <!-- 2. Rock Paper Scissors Game -->
+        <div id="rock-paper-scissors" class="game-content">
+            <h1>Rock Paper Scissors</h1>
+            <div class="game-info">
+                Choose your weapon! Rock beats scissors, scissors beat paper, paper beats rock.
+            </div>
+            
+            <div>
+                <button onclick="playRPS('rock')">Rock</button>
+                <button onclick="playRPS('paper')">Paper</button>
+                <button onclick="playRPS('scissors')">Scissors</button>
+            </div>
+            
+            <div id="rps-result" class="result"></div>
+            <div id="rps-score">Score: You 0 - 0 Computer</div>
+        </div>
+        
+        <!-- 3. Tic Tac Toe Game -->
+        <div id="tic-tac-toe" class="game-content">
+            <h1>Tic Tac Toe</h1>
+            <div class="game-info">
+                Two players game. Take turns placing X and O. Get three in a row to win!
+            </div>
+            
+            <div class="tic-tac-toe-board" id="tic-tac-toe-board"></div>
+            
+            <div id="tic-tac-toe-status" class="result info">Player X's turn</div>
+            <button onclick="resetTicTacToe()">New Game</button>
+        </div>
+        
+        <!-- 4. Guess Word Game -->
+        <div id="guess-word" class="game-content">
+            <h1>Guess the Word</h1>
+            <div class="game-info">
+                Guess letters to reveal the hidden word! You have 6 wrong guesses allowed.
+            </div>
+            
+            <div class="word-display" id="word-display"></div>
+            
+            <div>
+                <input type="text" id="letter-guess" maxlength="1" placeholder="Enter a letter">
+                <button onclick="guessLetter()">Guess</button>
+                <button onclick="resetGuessWord()">New Word</button>
+            </div>
+            
+            <div id="word-result" class="result"></div>
+            <div id="word-attempts">Remaining attempts: 6</div>
+            <div id="guessed-letters">Guessed letters: </div>
+        </div>
+        
+        <!-- 5. Dice Roll Game -->
+        <div id="dice-roll" class="game-content">
+            <h1>Dice Rolling Game</h1>
+            <div class="game-info">
+                Roll the dice and compete against the computer! Higher number wins.
+            </div>
+            
+            <div>
+                <button onclick="rollDice()">Roll Dice</button>
+            </div>
+            
+            <div id="dice-result" class="result"></div>
+            <div id="dice-score">Score: You 0 - 0 Computer</div>
+        </div>
+        
+        <!-- 6. Number Bomb Game -->
+        <div id="number-bomb" class="game-content">
+            <h1>Number Bomb</h1>
+            <div class="game-info">
+                Guess numbers to narrow down the range. Avoid hitting the bomb!
+            </div>
+            
+            <div id="bomb-range" class="result info">Current range: 1 - 100</div>
+            
+            <div>
+                <input type="number" id="bomb-guess" min="1" max="100" placeholder="Enter your guess">
+                <button onclick="guessBomb()">Guess</button>
+                <button onclick="resetNumberBomb()">Reset</button>
+            </div>
+            
+            <div id="bomb-result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables for games
+        let coinScore, board, currentPlayer, gameActive;
+        let targetWord, guessedLetters, remainingAttempts;
+        let bombMin, bombMax, bombNumber, diceScore, rpsScore;
+        
+        // Initialize all games
+        window.onload = function() {
+            resetCoinFlip();
+            resetRPS();
+            resetTicTacToe();
+            resetGuessWord();
+            resetDiceGame();
+            resetNumberBomb();
+        };
+        
+        // Navigation between games
+        function showGame(gameId) {
+            // Hide all game contents
+            document.querySelectorAll('.game-content').forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            // Remove active class from all nav buttons
+            document.querySelectorAll('.game-nav button').forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            // Show selected game
+            document.getElementById(gameId).classList.add('active');
+            
+            // Set active button
+            event.target.classList.add('active');
+        }
+        
+        // 1. Coin Flip Game Functions
+        function resetCoinFlip() {
+            coinScore = { player: 0, coin: 0 };
+            document.getElementById('coin').textContent = 'Choose';
+            document.getElementById('coin').className = 'coin';
+            document.getElementById('coin-result').textContent = '';
+            document.getElementById('coin-result').className = 'result';
+            document.getElementById('coin-score').textContent = `Score: You ${coinScore.player} - ${coinScore.coin} Coin`;
+        }
+        
+        function flipCoin(playerGuess) {
+            const coinElement = document.getElementById('coin');
+            const resultDiv = document.getElementById('coin-result');
+            
+            // Add flipping animation
+            coinElement.className = 'coin flipping';
+            coinElement.textContent = 'Flipping...';
+            
+            // Simulate coin flip with delay
+            setTimeout(() => {
+                const coinResult = Math.random() < 0.5 ? 'heads' : 'tails';
+                const coinText = coinResult === 'heads' ? 'Heads' : 'Tails';
+                
+                coinElement.className = 'coin';
+                coinElement.textContent = coinText;
+                
+                if (playerGuess === coinResult) {
+                    coinScore.player++;
+                    resultDiv.textContent = `You win! It's ${coinText}!`;
+                    resultDiv.className = 'result success';
+                } else {
+                    coinScore.coin++;
+                    resultDiv.textContent = `You lose! It's ${coinText}!`;
+                    resultDiv.className = 'result error';
+                }
+                
+                document.getElementById('coin-score').textContent = `Score: You ${coinScore.player} - ${coinScore.coin} Coin`;
+            }, 1000);
+        }
+        
+        // 2. Rock Paper Scissors Functions
+        function resetRPS() {
+            rpsScore = { player: 0, computer: 0 };
+            document.getElementById('rps-score').textContent = `Score: You ${rpsScore.player} - ${rpsScore.computer} Computer`;
+            document.getElementById('rps-result').textContent = '';
+            document.getElementById('rps-result').className = 'result';
+        }
+        
+        function playRPS(playerChoice) {
+            const choices = ['rock', 'paper', 'scissors'];
+            const computerChoice = choices[Math.floor(Math.random() * 3)];
+            const resultDiv = document.getElementById('rps-result');
+            
+            let result = '';
+            
+            if (playerChoice === computerChoice) {
+                result = `It's a tie! Both chose ${playerChoice}.`;
+                resultDiv.className = 'result info';
+            } else if (
+                (playerChoice === 'rock' && computerChoice === 'scissors') ||
+                (playerChoice === 'scissors' && computerChoice === 'paper') ||
+                (playerChoice === 'paper' && computerChoice === 'rock')
+            ) {
+                rpsScore.player++;
+                result = `You win! ${playerChoice} beats ${computerChoice}.`;
+                resultDiv.className = 'result success';
+            } else {
+                rpsScore.computer++;
+                result = `You lose! ${computerChoice} beats ${playerChoice}.`;
+                resultDiv.className = 'result error';
+            }
+            
+            resultDiv.textContent = result;
+            document.getElementById('rps-score').textContent = `Score: You ${rpsScore.player} - ${rpsScore.computer} Computer`;
+        }
+        
+        // 3. Tic Tac Toe Functions
+        function resetTicTacToe() {
+            board = ['', '', '', '', '', '', '', '', ''];
+            currentPlayer = 'X';
+            gameActive = true;
+            const boardElement = document.getElementById('tic-tac-toe-board');
+            boardElement.innerHTML = '';
+            
+            // Create game board
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'tic-tac-toe-cell';
+                cell.dataset.index = i;
+                cell.onclick = () => makeMove(i);
+                boardElement.appendChild(cell);
+            }
+            
+            document.getElementById('tic-tac-toe-status').textContent = `Player ${currentPlayer}'s turn`;
+            document.getElementById('tic-tac-toe-status').className = 'result info';
+        }
+        
+        function makeMove(index) {
+            if (!gameActive || board[index] !== '') return;
+            
+            board[index] = currentPlayer;
+            document.querySelector(`.tic-tac-toe-cell[data-index="${index}"]`).textContent = currentPlayer;
+            
+            if (checkWin()) {
+                document.getElementById('tic-tac-toe-status').textContent = `Player ${currentPlayer} wins!`;
+                document.getElementById('tic-tac-toe-status').className = 'result success';
+                gameActive = false;
+                return;
+            }
+            
+            if (checkDraw()) {
+                document.getElementById('tic-tac-toe-status').textContent = "It's a draw!";
+                document.getElementById('tic-tac-toe-status').className = 'result info';
+                gameActive = false;
+                return;
+            }
+            
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            document.getElementById('tic-tac-toe-status').textContent = `Player ${currentPlayer}'s turn`;
+        }
+        
+        function checkWin() {
+            const winPatterns = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+                [0, 4, 8], [2, 4, 6]             // Diagonals
+            ];
+            
+            return winPatterns.some(pattern => {
+                return pattern.every(index => board[index] === currentPlayer);
+            });
+        }
+        
+        function checkDraw() {
+            return board.every(cell => cell !== '');
+        }
+        
+        // 4. Guess Word Functions
+        function resetGuessWord() {
+            const words = ['python', 'apple', 'banana', 'computer', 'sunshine', 'programming', 'elephant'];
+            targetWord = words[Math.floor(Math.random() * words.length)];
+            guessedLetters = [];
+            remainingAttempts = 6;
+            
+            updateWordDisplay();
+            document.getElementById('word-attempts').textContent = `Remaining attempts: ${remainingAttempts}`;
+            document.getElementById('guessed-letters').textContent = 'Guessed letters: ';
+            document.getElementById('word-result').textContent = '';
+            document.getElementById('word-result').className = 'result';
+            document.getElementById('letter-guess').value = '';
+            document.getElementById('letter-guess').disabled = false;
+        }
+        
+        function updateWordDisplay() {
+            const display = targetWord.split('').map(letter => 
+                guessedLetters.includes(letter) ? letter : '_'
+            ).join(' ');
+            
+            document.getElementById('word-display').textContent = display;
+        }
+        
+        function guessLetter() {
+            const letterInput = document.getElementById('letter-guess');
+            const letter = letterInput.value.toLowerCase();
+            
+            if (!letter.match(/[a-z]/) || letter.length !== 1) {
+                document.getElementById('word-result').textContent = 'Please enter a single letter!';
+                document.getElementById('word-result').className = 'result error';
+                return;
+            }
+            
+            if (guessedLetters.includes(letter)) {
+                document.getElementById('word-result').textContent = `You already guessed '${letter}'!`;
+                document.getElementById('word-result').className = 'result info';
+                return;
+            }
+            
+            guessedLetters.push(letter);
+            document.getElementById('guessed-letters').textContent = `Guessed letters: ${guessedLetters.join(', ')}`;
+            
+            if (targetWord.includes(letter)) {
+                document.getElementById('word-result').textContent = `Good guess! '${letter}' is in the word.`;
+                document.getElementById('word-result').className = 'result success';
+                
+                // Check if player won
+                if (targetWord.split('').every(l => guessedLetters.includes(l))) {
+                    document.getElementById('word-result').textContent = `Congratulations! You guessed the word: ${targetWord}`;
+                    letterInput.disabled = true;
+                    return;
+                }
+            } else {
+                remainingAttempts--;
+                document.getElementById('word-result').textContent = `Wrong! '${letter}' is not in the word.`;
+                document.getElementById('word-result').className = 'result error';
+                document.getElementById('word-attempts').textContent = `Remaining attempts: ${remainingAttempts}`;
+                
+                if (remainingAttempts <= 0) {
+                    document.getElementById('word-result').textContent = `Game over! The word was: ${targetWord}`;
+                    letterInput.disabled = true;
+                }
+            }
+            
+            updateWordDisplay();
+            letterInput.value = '';
+            letterInput.focus();
+        }
+        
+        // 5. Dice Roll Functions
+        function resetDiceGame() {
+            diceScore = { player: 0, computer: 0 };
+            document.getElementById('dice-score').textContent = `Score: You ${diceScore.player} - ${diceScore.computer} Computer`;
+            document.getElementById('dice-result').textContent = '';
+            document.getElementById('dice-result').className = 'result';
+        }
+        
+        function rollDice() {
+            const playerDice = Math.floor(Math.random() * 6) + 1;
+            const computerDice = Math.floor(Math.random() * 6) + 1;
+            const resultDiv = document.getElementById('dice-result');
+            
+            let result = `You rolled ${playerDice}, Computer rolled ${computerDice}. `;
+            
+            if (playerDice > computerDice) {
+                diceScore.player++;
+                result += "You win this round!";
+                resultDiv.className = 'result success';
+            } else if (playerDice < computerDice) {
+                diceScore.computer++;
+                result += "Computer wins this round!";
+                resultDiv.className = 'result error';
+            } else {
+                result += "It's a tie!";
+                resultDiv.className = 'result info';
+            }
+            
+            resultDiv.textContent = result;
+            document.getElementById('dice-score').textContent = `Score: You ${diceScore.player} - ${diceScore.computer} Computer`;
+        }
+        
+        // 6. Number Bomb Functions
+        function resetNumberBomb() {
+            bombMin = 1;
+            bombMax = 100;
+            bombNumber = Math.floor(Math.random() * 100) + 1;
+            
+            document.getElementById('bomb-range').textContent = `Current range: ${bombMin} - ${bombMax}`;
+            document.getElementById('bomb-result').textContent = '';
+            document.getElementById('bomb-result').className = 'result';
+            document.getElementById('bomb-guess').value = '';
+            document.getElementById('bomb-guess').disabled = false;
+        }
+        
+        function guessBomb() {
+            const guessInput = document.getElementById('bomb-guess');
+            const guess = parseInt(guessInput.value);
+            const resultDiv = document.getElementById('bomb-result');
+            
+            if (isNaN(guess) || guess < bombMin || guess > bombMax) {
+                resultDiv.textContent = `Please enter a valid number between ${bombMin} and ${bombMax}!`;
+                resultDiv.className = 'result error';
+                return;
+            }
+            
+            if (guess === bombNumber) {
+                resultDiv.textContent = `Boom! You hit the bomb! The number was ${bombNumber}.`;
+                resultDiv.className = 'result error';
+                guessInput.disabled = true;
+                return;
+            }
+            
+            if (guess < bombNumber) {
+                bombMin = guess + 1;
+                resultDiv.textContent = `Too small! The bomb is higher than ${guess}.`;
+            } else {
+                bombMax = guess - 1;
+                resultDiv.textContent = `Too big! The bomb is lower than ${guess}.`;
+            }
+            
+            resultDiv.className = 'result info';
+            document.getElementById('bomb-range').textContent = `Current range: ${bombMin} - ${bombMax}`;
+            
+            if (bombMin >= bombMax) {
+                resultDiv.textContent = `Congratulations! You avoided the bomb! The number was ${bombNumber}.`;
+                resultDiv.className = 'result success';
+                guessInput.disabled = true;
+            }
+            
+            guessInput.value = '';
+            guessInput.focus();
+        }
+    </script>
+</body>
+</html>
