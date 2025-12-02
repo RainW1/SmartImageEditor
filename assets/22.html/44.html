@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breakout Game</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Arial', sans-serif; }
+        body { background: #1a1a1a; color: #fff; min-height: 100vh; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 10px; color: #4CAF50; }
+        .header p { color: #ccc; font-size: 1.1rem; }
+        .game-container { max-width: 650px; margin: 0 auto; background: #222; border-radius: 12px; padding: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .control-buttons { text-align: center; margin: 10px 0; }
+        .control-btn { padding: 8px 16px; margin: 0 5px; background: #2196F3; color: white; border-radius: 4px; border: none; cursor: pointer; }
+        .control-btn.stop { background: #f44336; }
+        .control-btn:hover { opacity: 0.9; transform: translateY(-2px); }
+        .status { margin: 15px 0; font-size: 1.2rem; text-align: center; color: #4CAF50; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Breakout</h1>
+        <p>Break all the bricks with the ball - Control paddle with mouse</p>
+    </div>
+
+    <div class="game-container">
+        <div class="control-buttons">
+            <button class="control-btn" onclick="initBreakout()">Start / Reset</button>
+            <button class="control-btn stop" onclick="pauseBreakout()">Pause</button>
+        </div>
+        <div class="status" id="breakout-score">Score: 0</div>
+        <canvas id="breakout-canvas" width="600" height="400" style="border: 2px solid #333; display: block; margin: 0 auto; background: #1a1a1a;"></canvas>
+        <p style="text-align: center; margin-top: 10px; color: #ccc; font-size: 0.9rem;">Move mouse to control paddle</p>
+        <div class="status" id="breakout-status">Ready to start!</div>
+    </div>
+
+    <script>
+        // Game state management
+        const gameState = {
+            loop: null,
+            paused: false
+        };
+
+        let breakoutPaddle, breakoutBall, breakoutBricks, breakoutScore;
+        const breakoutCanvas = document.getElementById('breakout-canvas');
+        const breakoutCtx = breakoutCanvas.getContext('2d');
+        const breakoutBrickRowCount = 5;
+        const breakoutBrickColCount = 8;
+
+        function initBreakout() {
+            // Clear previous loop
+            if (gameState.loop) clearInterval(gameState.loop);
+            
+            gameState.paused = false;
+            breakoutPaddle = { x: breakoutCanvas.width / 2 - 50, y: breakoutCanvas.height - 20, width: 100, height: 10, speed: 8 };
+            breakoutBall = { x: breakoutCanvas.width / 2, y: breakoutCanvas.height / 2, size: 8, dx: 4, dy: -4 };
+            breakoutBricks = [];
+            breakoutScore = 0;
+            
+            // Initialize Bricks
+            const brickWidth = (breakoutCanvas.width - 20) / breakoutBrickColCount;
+            const brickHeight = 20;
+            const brickGap = 5;
+            for (let r = 0; r < breakoutBrickRowCount; r++) {
+                for (let c = 0; c < breakoutBrickColCount; c++) {
+                    breakoutBricks.push({
+                        x: c * (brickWidth + brickGap) + 10,
+                        y: r * (brickHeight + brickGap) + 30,
+                        width: brickWidth,
+                        height: brickHeight,
+                        alive: true
+                    });
+                }
+            }
+            
+            document.getElementById('breakout-score').textContent = `Score: ${breakoutScore}`;
+            document.getElementById('breakout-status').textContent = "🎮 Game started! Move mouse to control paddle";
+            
+            // Start new loop
+            gameState.loop = setInterval(breakoutUpdate, 16);
+        }
+
+        function pauseBreakout() {
+            if (gameState.paused) {
+                // Resume
+                gameState.loop = setInterval(breakoutUpdate, 16);
+                document.getElementById('breakout-status').textContent = "🎮 Resumed!";
+                gameState.paused = false;
+            } else {
+                // Pause
+                clearInterval(gameState.loop);
+                document.getElementById('breakout-status').textContent = "⏸️ Paused - Click Start to resume";
+                gameState.paused = true;
+            }
+        }
+
+        function breakoutDraw() {
+            // Clear canvas
+            breakoutCtx.fillStyle = "#1a1a1a";
+            breakoutCtx.fillRect(0, 0, breakoutCanvas.width, breakoutCanvas.height);
+            
+            // Draw Paddle
+            breakoutCtx.fillStyle = "#4CAF50";
+            breakoutCtx.fillRect(breakoutPaddle.x, breakoutPaddle.y, breakoutPaddle.width, breakoutPaddle.height);
+            
+            // Draw Ball
+            breakoutCtx.fillStyle = "#FFEB3B";
+            breakoutCtx.beginPath();
+            breakoutCtx.arc(breakoutBall.x, breakoutBall.y, breakoutBall.size, 0, Math.PI * 2);
+            breakoutCtx.fill();
+            
+            // Draw Bricks
+            breakoutBricks.forEach(brick => {
+                if (brick.alive) {
+                    breakoutCtx.fillStyle = `hsl(${brick.y * 2}, 70%, 50%)`;
+                    breakoutCtx.fillRect(brick.x, brick.y, brick.width, brick.height);
+                    breakoutCtx.strokeStyle = "#fff";
+                    breakoutCtx.strokeRect(brick.x, brick.y, brick.width, brick.height);
+                }
+            });
+        }
+
+        // Mouse move handler
+        function handleBreakoutMouseMove(e) {
+            if (gameState.paused) return;
+            
+            const rect = breakoutCanvas.getBoundingClientRect();
+            breakoutPaddle.x = e.clientX - rect.left - breakoutPaddle.width / 2;
+            // Boundary check
+            if (breakoutPaddle.x < 0) breakoutPaddle.x = 0;
+            if (breakoutPaddle.x + breakoutPaddle.width > breakoutCanvas.width) {
+                breakoutPaddle.x = breakoutCanvas.width - breakoutPaddle.width;
+            }
+        }
+
+        // Bind mouse event once
+        breakoutCanvas.addEventListener("mousemove", handleBreakoutMouseMove);
+
+        function breakoutUpdate() {
+            breakoutDraw();
+            
+            // Move Ball
+            breakoutBall.x += breakoutBall.dx;
+            breakoutBall.y += breakoutBall.dy;
+            
+            // Wall Collision
+            if (breakoutBall.x - breakoutBall.size < 0 || breakoutBall.x + breakoutBall.size > breakoutCanvas.width) {
+                breakoutBall.dx = -breakoutBall.dx;
+            }
+            if (breakoutBall.y - breakoutBall.size < 0) {
+                breakoutBall.dy = -breakoutBall.dy;
+            }
+            
+            // Paddle Collision
+            if (
+                breakoutBall.y + breakoutBall.size > breakoutPaddle.y &&
+                breakoutBall.x > breakoutPaddle.x &&
+                breakoutBall.x < breakoutPaddle.x + breakoutPaddle.width
+            ) {
+                breakoutBall.dy = -breakoutBall.dy;
+                // Angle based on hit position
+                const hitPos = (breakoutBall.x - (breakoutPaddle.x + breakoutPaddle.width / 2)) / (breakoutPaddle.width / 2);
+                breakoutBall.dx = hitPos * 6;
+            }
+            
+            // Brick Collision
+            breakoutBricks.forEach(brick => {
+                if (brick.alive &&
+                    breakoutBall.x + breakoutBall.size > brick.x &&
+                    breakoutBall.x - breakoutBall.size < brick.x + brick.width &&
+                    breakoutBall.y + breakoutBall.size > brick.y &&
+                    breakoutBall.y - breakoutBall.size < brick.y + brick.height
+                ) {
+                    breakoutBall.dy = -breakoutBall.dy;
+                    brick.alive = false;
+                    breakoutScore += 10;
+                    document.getElementById('breakout-score').textContent = `Score: ${breakoutScore}`;
+                    
+                    // Check Win
+                    if (breakoutBricks.every(b => !b.alive)) {
+                        clearInterval(gameState.loop);
+                        document.getElementById('breakout-status').textContent = `🎉 You Won! Score: ${breakoutScore} - Click Start to play again`;
+                        gameState.loop = null;
+                        gameState.paused = true;
+                    }
+                }
+            });
+            
+            // Game Over (Ball Drops)
+            if (breakoutBall.y + breakoutBall.size > breakoutCanvas.height) {
+                clearInterval(gameState.loop);
+                document.getElementById('breakout-status').textContent = `💀 Game Over! Score: ${breakoutScore} - Click Start to play again`;
+                gameState.loop = null;
+                gameState.paused = true;
+            }
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            // Just set up initial canvas
+            breakoutCtx.fillStyle = "#1a1a1a";
+            breakoutCtx.fillRect(0, 0, breakoutCanvas.width, breakoutCanvas.height);
+        };
+    </script>
+</body>
+</html>
